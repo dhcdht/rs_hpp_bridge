@@ -1,0 +1,8 @@
+[package]
+name = "rs_hpp_bridge"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+clang = "2.0.0"
