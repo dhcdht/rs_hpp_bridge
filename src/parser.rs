@@ -1,9 +1,7 @@
 use core::{fmt, str};
 use std::fmt::Debug;
 
-pub fn parse_hpp(hpp_path: &str) -> HppElement {
-    println!("parse_hpp: {}", hpp_path);
-
+pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str) {
     let clang = clang::Clang::new().unwrap();
     let index = clang::Index::new(&clang, false, false);
     let translation_unit = index.parser(hpp_path).parse().unwrap();
@@ -11,11 +9,18 @@ pub fn parse_hpp(hpp_path: &str) -> HppElement {
 
     let mut file = File::default();
     file.path = entity.get_name().unwrap_or_default();
-    let mut ret = HppElement::File(file);
-    visit_entity(&mut ret, &entity, 0);
-    println!("{:#?}", ret);
+    let mut file_element = HppElement::File(file);
+    visit_parse_clang_entity(&mut file_element, &entity, 0);
+    // println!("{:#?}", file_element);
 
-    return ret;
+    visit_parse_hpp_element(out_gen_context, &file_element);
+    out_gen_context.hpp_elements.push(file_element);
+}
+
+#[derive(Debug, Default)]
+pub struct GenContext {
+    pub hpp_elements: Vec<HppElement>,
+    pub class_names: Vec<String>,
 }
 
 pub enum HppElement {
@@ -34,7 +39,7 @@ pub struct File {
 
 #[derive(Debug, Default)]
 pub struct Class {
-    pub typeStr: String,
+    pub type_str: String,
 
     pub children: Vec<HppElement>,
 }
@@ -42,7 +47,7 @@ pub struct Class {
 #[derive(Debug, Default)]
 pub struct Method {
     pub name: String,
-    pub returnTypeStr: String,
+    pub return_type_str: String,
     pub params: Vec<MethodParam>,
 }
 
@@ -54,11 +59,11 @@ pub struct Field {
 #[derive(Debug, Default)]
 pub struct MethodParam {
     pub name: String,
-    pub typeStr: String,
+    pub type_str: String,
 }
 
 impl HppElement {
-    fn addChild(&mut self, child: HppElement) {
+    fn add_child(&mut self, child: HppElement) {
         match self {
             HppElement::File(file) => {
                 file.children.push(child);
@@ -84,7 +89,7 @@ impl fmt::Debug for HppElement {
     }
 }
 
-fn visit_entity(ret: &mut HppElement, entity: &clang::Entity, indent: usize) {
+fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::Entity, indent: usize) {
     // for _ in 0..indent {
     //     print!(" ");
     // }
@@ -96,13 +101,13 @@ fn visit_entity(ret: &mut HppElement, entity: &clang::Entity, indent: usize) {
     match entity.get_kind() {
         clang::EntityKind::ClassDecl => {
             let mut class = Class::default();
-            class.typeStr = entity.get_name().unwrap_or_default();
+            class.type_str = entity.get_name().unwrap_or_default();
 
             let mut element = HppElement::Class(class);
             for child in entity.get_children() {
-                visit_entity(&mut element, &child, indent + 1);
+                visit_parse_clang_entity(&mut element, &child, indent + 1);
             }
-            ret.addChild(element);
+            out_hpp_element.add_child(element);
         }
         clang::EntityKind::Method => 'block: {
             if entity.get_accessibility().unwrap() != clang::Accessibility::Public {
@@ -111,20 +116,20 @@ fn visit_entity(ret: &mut HppElement, entity: &clang::Entity, indent: usize) {
 
             let mut method = Method::default();
             method.name = entity.get_name().unwrap_or_default();
-            method.returnTypeStr = entity.get_result_type().unwrap().get_display_name();
+            method.return_type_str = entity.get_result_type().unwrap().get_display_name();
 
             let mut element = HppElement::Method(method);
             for child in entity.get_children() {
-                visit_entity(&mut element, &child, indent + 1);
+                visit_parse_clang_entity(&mut element, &child, indent + 1);
             }
-            ret.addChild(element);
+            out_hpp_element.add_child(element);
         }
         clang::EntityKind::ParmDecl => {
-            match ret {
+            match out_hpp_element {
                 HppElement::Method(method) => {
                     let mut param = MethodParam::default();
                     param.name = entity.get_name().unwrap_or_default();
-                    param.typeStr = entity.get_type().unwrap().get_display_name();
+                    param.type_str = entity.get_type().unwrap().get_display_name();
 
                     method.params.push(param);
                 }
@@ -143,14 +148,30 @@ fn visit_entity(ret: &mut HppElement, entity: &clang::Entity, indent: usize) {
 
             let mut element = HppElement::Field(field);
             for child in entity.get_children() {
-                visit_entity(&mut element, &child, indent + 1);
+                visit_parse_clang_entity(&mut element, &child, indent + 1);
             }
-            ret.addChild(element);
+            out_hpp_element.add_child(element);
         }
         _ => {
             for child in entity.get_children() {
-                visit_entity(ret, &child, indent + 1);
+                visit_parse_clang_entity(out_hpp_element, &child, indent + 1);
             }
+        }
+    }
+}
+
+fn visit_parse_hpp_element(out_gen_context: &mut GenContext, hpp_element: &HppElement) {
+    match hpp_element {
+        HppElement::File(file) => {
+            for child in &file.children {
+                visit_parse_hpp_element(out_gen_context, child);
+            }
+        }
+        HppElement::Class(class) => {
+            out_gen_context.class_names.push(class.type_str.clone());
+        }
+        _ => {
+
         }
     }
 }
