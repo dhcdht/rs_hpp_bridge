@@ -1,0 +1,49 @@
+GenContext {
+    hpp_elements: [
+        File {
+            path: "./tests/1/test.hpp",
+            children: [
+                Class {
+                    type_str: "T1",
+                    children: [
+                        Method {
+                            name: "createT1",
+                            return_type_str: "T1 *",
+                            params: [],
+                        },
+                        Method {
+                            name: "prit",
+                            return_type_str: "void",
+                            params: [
+                                MethodParam {
+                                    name: "a",
+                                    type_str: "int",
+                                },
+                            ],
+                        },
+                        Method {
+                            name: "add",
+                            return_type_str: "int",
+                            params: [
+                                MethodParam {
+                                    name: "a",
+                                    type_str: "int",
+                                },
+                                MethodParam {
+                                    name: "b",
+                                    type_str: "float",
+                                },
+                            ],
+                        },
+                        Field {
+                            name: "sum",
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+    class_names: [
+        "T1",
+    ],
+}

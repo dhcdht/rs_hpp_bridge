@@ -1,4 +1,4 @@
-use std::{fs, io::Write, mem::replace, path::{Path, PathBuf}, str::FromStr};
+use std::{fs, io::Write, path::{Path, PathBuf}, str::FromStr};
 
 use crate::parser::{self, GenContext, HppElement};
 

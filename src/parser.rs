@@ -16,6 +16,14 @@ pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str) {
     visit_parse_hpp_element(out_gen_context, &file_element);
     out_gen_context.hpp_elements.push(file_element);
 }
+#[test]
+fn test_parse_hpp() {
+    let mut gen_context = GenContext::default();
+    parse_hpp(&mut gen_context, "./tests/1/test.hpp");
+    let result = format!("{:#?}", gen_context);
+    let expected = std::fs::read_to_string("./tests/1/ut_result/parse_hpp.txt").unwrap();
+    assert_eq!(result, expected);
+}
 
 #[derive(Debug, Default)]
 pub struct GenContext {
