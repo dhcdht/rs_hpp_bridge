@@ -63,34 +63,42 @@ void {}_setDylib(DynamicLibrary dylib) {{
             if let Some(cur_class) = local_ffiapi_gen_context.cur_class {
                 cur_class_name = &cur_class.type_str;
             }
+            let is_normal_method = method.method_type == crate::parser::MethodType::Normal;
+            // 是否需要加第一个类的实例参数，模拟调用类实例的方法
+            let need_add_first_class_param= is_normal_method && !cur_class_name.is_empty();
             let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
 
             // dart函数
             let mut dart_fun_decl = format!("late final {} = ptr_{}.asFunction<{} Function(",
                 ffiapi_c_method_name, ffiapi_c_method_name, get_dart_fun_type_str(gen_context, &method.return_type_str),
             );
-            if !cur_class_name.is_empty() {
+            if need_add_first_class_param {
                 dart_fun_decl.push_str("int, ");
             }
             for param in &method.params {
                 dart_fun_decl.push_str(&get_dart_fun_type_str(gen_context, &param.type_str));
                 dart_fun_decl.push_str(", ");
             }
-            dart_fun_decl.truncate(dart_fun_decl.len() - ", ".len());   // 去掉最后一个参数的, 
+            if need_add_first_class_param || !method.params.is_empty() {
+                dart_fun_decl.truncate(dart_fun_decl.len() - ", ".len());   // 去掉最后一个参数的, 
+            }
             dart_fun_decl.push_str(")>();\n");
             ffiapi_file.write(dart_fun_decl.as_bytes());
 
             // native函数指针
             let mut native_fun_decl = format!("late final ptr_{} = _dylib.lookup<NativeFunction<{} Function(", 
             ffiapi_c_method_name, get_native_fun_type_str(gen_context, &method.return_type_str));
-            if !cur_class_name.is_empty() {
+            if need_add_first_class_param {
                 native_fun_decl.push_str("Int64, ");
             }
             for param in &method.params {
                 native_fun_decl.push_str(&get_native_fun_type_str(gen_context, &param.type_str));
                 native_fun_decl.push_str(", ");
             }
-            native_fun_decl.truncate(native_fun_decl.len() - ", ".len());   // 去掉最后一个参数的, 
+            if need_add_first_class_param || !method.params.is_empty() {
+                native_fun_decl.truncate(native_fun_decl.len() - ", ".len());   // 去掉最后一个参数的, 
+                
+            }
             native_fun_decl.push_str(&format!(")>>('{}');\n", ffiapi_c_method_name));
             ffiapi_file.write(native_fun_decl.as_bytes());
 
@@ -163,6 +171,9 @@ class {} {{
                 cur_class_name = &cur_class.type_str;
             }
             let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
+            let is_normal_method = method.method_type == crate::parser::MethodType::Normal;
+            // 是否需要加第一个类的实例参数，模拟调用类实例的方法
+            let need_add_first_class_param= is_normal_method && !cur_class_name.is_empty();
             
             // 函数定义
             let mut dart_fun_impl = format!("    {} {}(", 
@@ -176,13 +187,13 @@ class {} {{
             dart_fun_impl.push_str(") {\n");
             // 函数实现
             dart_fun_impl.push_str(&format!("        return {}(", ffiapi_c_method_name));
-            if !cur_class_name.is_empty() {
+            if need_add_first_class_param {
                 dart_fun_impl.push_str("_nativePtr, ");
             }
             for param in &method.params {
                 dart_fun_impl.push_str(&format!("{}, ", param.name));
             }
-            if !cur_class_name.is_empty() || !method.params.is_empty() {
+            if need_add_first_class_param || !method.params.is_empty() {
                 dart_fun_impl.truncate(dart_fun_impl.len() - ", ".len());   // 去掉最后一个参数的, 
             }
             dart_fun_impl.push_str(");\n    }\n");

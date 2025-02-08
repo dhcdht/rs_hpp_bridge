@@ -7,9 +7,27 @@ GenContext {
                     type_str: "T1",
                     children: [
                         Method {
+                            name: "Constructor",
+                            return_type_str: "T1*",
+                            params: [],
+                            method_type: Constructor,
+                        },
+                        Method {
+                            name: "Constructor_double",
+                            return_type_str: "T1*",
+                            params: [
+                                MethodParam {
+                                    name: "d",
+                                    type_str: "double",
+                                },
+                            ],
+                            method_type: Constructor,
+                        },
+                        Method {
                             name: "createT1",
                             return_type_str: "T1 *",
                             params: [],
+                            method_type: Normal,
                         },
                         Method {
                             name: "prit",
@@ -20,6 +38,7 @@ GenContext {
                                     type_str: "int",
                                 },
                             ],
+                            method_type: Normal,
                         },
                         Method {
                             name: "add",
@@ -34,11 +53,18 @@ GenContext {
                                     type_str: "float",
                                 },
                             ],
+                            method_type: Normal,
                         },
                         Field {
                             name: "sum",
                         },
                     ],
+                },
+                Method {
+                    name: "standalone_empty",
+                    return_type_str: "void",
+                    params: [],
+                    method_type: Normal,
                 },
                 Method {
                     name: "standalone_mutiply",
@@ -53,6 +79,7 @@ GenContext {
                             type_str: "T1 *",
                         },
                     ],
+                    method_type: Normal,
                 },
             ],
         },

@@ -91,15 +91,20 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&parser::Class
     if let Some(cur_class) = class {
         cur_class_name = &cur_class.type_str;
     }
+    let is_normal_method = method.method_type == parser::MethodType::Normal;
+    // 是否需要加第一个类的实例参数，模拟调用类实例的方法
+    let need_add_first_class_param= is_normal_method && !cur_class_name.is_empty();
 
     let mut method_decl = format!("{} ffi_{}_{}(", method.return_type_str, cur_class_name, method.name);
-    if !cur_class_name.is_empty() {
+    if need_add_first_class_param {
         method_decl.push_str(&format!("FFI_{} obj, ", cur_class_name));
     }
     for param in &method.params {
         method_decl.push_str(&format!("{} {}, ", param.type_str, param.name));
     }
-    method_decl.truncate(method_decl.len() - ", ".len()); // 去掉最后一个参数的, 
+    if need_add_first_class_param || !method.params.is_empty() {
+        method_decl.truncate(method_decl.len() - ", ".len()); // 去掉最后一个参数的, 
+    }
     method_decl = replace_class_to_ffi_str(c_context.gen_context, &method_decl);
     method_decl.push_str(")");
     let mut method_impl = format!("{}", method_decl);
@@ -107,15 +112,31 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&parser::Class
 
     let impl_return_type = replace_class_to_ffi_str(c_context.gen_context, &method.return_type_str);
     let mut impl_str: String = "".to_string();
-    if !cur_class_name.is_empty() {
-        impl_str.push_str(&format!(" {{
+    match method.method_type {
+        parser::MethodType::Normal => {
+            // 普通类函数
+            if !cur_class_name.is_empty() {
+                impl_str.push_str(&format!(" {{
     {}* ptr = ({}*)obj;
     return ({})ptr->{}(", 
-            cur_class_name, cur_class_name, impl_return_type, method.name));
-    } else {
-        impl_str.push_str(&format!(" {{
+                    cur_class_name, cur_class_name, impl_return_type, method.name));
+            } 
+            // 独立函数
+            else {
+                impl_str.push_str(&format!(" {{
     return ({}){}(", 
-            impl_return_type, method.name));
+                    impl_return_type, method.name));
+            }
+        }
+        // 构造函数
+        parser::MethodType::Constructor => {
+            impl_str.push_str(&format!(" {{
+    return ({})new {}(", 
+                    impl_return_type, cur_class_name));
+        }
+        _ => {
+            unimplemented!("gen_c_class_method: unknown method type");
+        }
     }
     for param in &method.params {
         impl_str.push_str(&format!("({}){}, ", replace_ffi_to_class_str(c_context.gen_context, &param.type_str), param.name));

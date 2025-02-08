@@ -52,11 +52,22 @@ pub struct Class {
     pub children: Vec<HppElement>,
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
+pub enum MethodType {
+    /// 实例方法
+    #[default]
+    Normal,
+    /// 构造函数
+    Constructor,
+}
+
 #[derive(Debug, Default)]
 pub struct Method {
     pub name: String,
     pub return_type_str: String,
     pub params: Vec<MethodParam>,
+
+    pub method_type: MethodType,
 }
 
 #[derive(Debug, Default)]
@@ -119,6 +130,30 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
                 visit_parse_clang_entity(&mut element, &child, indent + 1);
             }
             out_hpp_element.add_child(element);
+        }
+        clang::EntityKind::Constructor => 'block: {
+            match out_hpp_element {
+                HppElement::Class(class) => {
+                    let mut element = HppElement::Method(Method::default());
+                    for child in entity.get_arguments().unwrap_or_default() {
+                        visit_parse_clang_entity(&mut element, &child, indent + 1);
+                    }
+                    
+                    if let HppElement::Method(ref mut updated_method) = element {
+                        let mut method_name = format!("Constructor");
+                        for param in &updated_method.params {
+                            method_name.push_str(&format!("_{}", param.type_str));
+                        }
+                        updated_method.method_type = MethodType::Constructor;
+                        updated_method.name = method_name;
+                        updated_method.return_type_str = format!("{}*", class.type_str);
+                    }
+                    out_hpp_element.add_child(element);
+                }
+                _ => {
+                    unimplemented!("clang::EntityKind::Constructor");
+                }
+            }
         }
         clang::EntityKind::Method => 'block: {
             if entity.get_accessibility().unwrap() != clang::Accessibility::Public {

@@ -6,6 +6,7 @@
 class T1 {
 public:
     T1() {};
+    T1(double d) {};
     virtual ~T1() {};
 
     T1* createT1() {
@@ -25,6 +26,10 @@ private:
     };
     float isum;
 };
+
+void standalone_empty() {
+    
+}
 
 double standalone_mutiply(double a, T1* b) {
     return a*b->sum;
