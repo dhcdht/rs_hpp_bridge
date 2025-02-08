@@ -94,8 +94,7 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&parser::Class
         method_decl.push_str(&format!("FFI_{} obj, ", cur_class_name));
     }
     for param in &method.params {
-        method_decl.push_str(&format!("{} {}", param.type_str, param.name));
-        method_decl.push_str(", ");
+        method_decl.push_str(&format!("{} {}, ", param.type_str, param.name));
     }
     method_decl.truncate(method_decl.len() - ", ".len()); // 去掉最后一个参数的, 
     method_decl = replace_class_to_ffi_str(c_context.gen_context, &method_decl);
@@ -116,8 +115,7 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&parser::Class
             impl_return_type, method.name));
     }
     for param in &method.params {
-        impl_str.push_str(&format!("({}){}", replace_ffi_to_class_str(c_context.gen_context, &param.type_str), param.name));
-        impl_str.push_str(", ");
+        impl_str.push_str(&format!("({}){}, ", replace_ffi_to_class_str(c_context.gen_context, &param.type_str), param.name));
     }
     if !method.params.is_empty() {
         impl_str.truncate(impl_str.len() - ", ".len()); // 去掉最后一个参数的, 
