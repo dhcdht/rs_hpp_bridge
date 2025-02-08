@@ -8,7 +8,7 @@ pub fn gen_c(gen_context: &GenContext, gen_out_dir: &str) {
             gen_c_file(gen_context, file, gen_out_dir);
         }
         _ => {
-            
+            unimplemented!("gen_c: first element is not File");
         }
     }
 }
@@ -56,7 +56,7 @@ fn gen_c_file(gen_context: &GenContext, file: &parser::File, gen_out_dir: &str) 
                 gen_c_class_method(&mut c_context, None, method);
             }
             _ => {
-
+                unimplemented!("gen_c_file: unknown child");
             }
         }
     }
@@ -76,8 +76,11 @@ c_context.ch_str.push_str(&c_class_decl);
             HppElement::Method(method) => {
                 gen_c_class_method(c_context, Some(&class), method);
             }
+            HppElement::Field(field) => {
+                // TODO
+            }
             _ => {
-
+                unimplemented!("gen_c_class: unknown child");
             }
         }
     }

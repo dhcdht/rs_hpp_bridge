@@ -80,7 +80,7 @@ impl HppElement {
                 class.children.push(child);
             }
             _ => {
-
+                unimplemented!("HppElement::add_child");
             },
         }
     }
@@ -145,7 +145,7 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
                     method.params.push(param);
                 }
                 _ => {
-
+                    unimplemented!("clang::EntityKind::ParmDecl");
                 }
             }
         }
@@ -194,7 +194,7 @@ fn visit_parse_hpp_element(out_gen_context: &mut GenContext, hpp_element: &HppEl
             out_gen_context.class_names.push(class.type_str.clone());
         }
         _ => {
-
+            // do nothing
         }
     }
 }

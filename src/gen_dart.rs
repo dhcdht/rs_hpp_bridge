@@ -96,8 +96,11 @@ void {}_setDylib(DynamicLibrary dylib) {{
 
             ffiapi_file.write("\n".as_bytes());
         }
+        HppElement::Field(field) => {
+            // TODO
+        }
         _ => {
-            
+            unimplemented!("gen_dart_ffiapi: unknown child");
         }
     }
 }
@@ -185,8 +188,11 @@ class {} {{
             dart_fun_impl.push_str(");\n    }\n");
             dart_file.write(dart_fun_impl.as_bytes());
         }
+        HppElement::Field(field) => {
+            // TODO
+        }
         _ => {
-
+            unimplemented!("gen_dart_api: unknown child");
         }
     }
 }
