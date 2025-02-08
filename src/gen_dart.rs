@@ -64,8 +64,9 @@ void {}_setDylib(DynamicLibrary dylib) {{
                 cur_class_name = &cur_class.type_str;
             }
             let is_normal_method = method.method_type == crate::parser::MethodType::Normal;
+            let is_destructor = method.method_type == crate::parser::MethodType::Destructor;
             // 是否需要加第一个类的实例参数，模拟调用类实例的方法
-            let need_add_first_class_param= is_normal_method && !cur_class_name.is_empty();
+            let need_add_first_class_param= (is_normal_method && !cur_class_name.is_empty()) || is_destructor;
             let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
 
             // dart函数
@@ -172,13 +173,14 @@ class {} {{
             }
             let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
             let is_normal_method = method.method_type == crate::parser::MethodType::Normal;
+            let is_destructor = method.method_type == crate::parser::MethodType::Destructor;
             // 是否需要加第一个类的实例参数，模拟调用类实例的方法
-            let need_add_first_class_param= is_normal_method && !cur_class_name.is_empty();
+            let need_add_first_class_param= (is_normal_method && !cur_class_name.is_empty()) || is_destructor;
             
             // 函数定义
             let mut dart_fun_impl = "".to_string();
             match method.method_type {
-                crate::parser::MethodType::Normal => {
+                crate::parser::MethodType::Normal | crate::parser::MethodType::Destructor => {
                     dart_fun_impl.push_str(&format!("    {} {}(", 
                         get_dart_fun_type_str(gen_context, &method.return_type_str), method.name));
                 }
@@ -199,7 +201,7 @@ class {} {{
             dart_fun_impl.push_str(") {\n");
             // 函数实现
             match method.method_type {
-                crate::parser::MethodType::Normal => {
+                crate::parser::MethodType::Normal | crate::parser::MethodType::Destructor => {
                     dart_fun_impl.push_str(&format!("        return {}(", ffiapi_c_method_name));
                 }
                 crate::parser::MethodType::Constructor => {

@@ -92,8 +92,9 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&parser::Class
         cur_class_name = &cur_class.type_str;
     }
     let is_normal_method = method.method_type == parser::MethodType::Normal;
+    let is_destructor = method.method_type == parser::MethodType::Destructor;
     // 是否需要加第一个类的实例参数，模拟调用类实例的方法
-    let need_add_first_class_param= is_normal_method && !cur_class_name.is_empty();
+    let need_add_first_class_param= (is_normal_method && !cur_class_name.is_empty()) || is_destructor;
 
     let mut method_decl = format!("{} ffi_{}_{}(", method.return_type_str, cur_class_name, method.name);
     if need_add_first_class_param {
@@ -132,7 +133,13 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&parser::Class
         parser::MethodType::Constructor => {
             impl_str.push_str(&format!(" {{
     return ({})new {}(", 
-                    impl_return_type, cur_class_name));
+                impl_return_type, cur_class_name));
+        }
+        parser::MethodType::Destructor => {
+            impl_str.push_str(&format!(" {{
+    {}* ptr = ({}*)obj;
+    return delete ptr; //", 
+                cur_class_name, cur_class_name));
         }
         _ => {
             unimplemented!("gen_c_class_method: unknown method type");

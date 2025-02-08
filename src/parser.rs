@@ -59,15 +59,16 @@ pub enum MethodType {
     Normal,
     /// 构造函数
     Constructor,
+    /// 析构函数
+    Destructor,
 }
 
 #[derive(Debug, Default)]
 pub struct Method {
+    pub method_type: MethodType,
     pub name: String,
     pub return_type_str: String,
     pub params: Vec<MethodParam>,
-
-    pub method_type: MethodType,
 }
 
 #[derive(Debug, Default)]
@@ -152,6 +153,22 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
                 }
                 _ => {
                     unimplemented!("clang::EntityKind::Constructor");
+                }
+            }
+        }
+        clang::EntityKind::Destructor => 'block: {
+            match out_hpp_element {
+                HppElement::Class(class) => {
+                    let mut method = Method::default();
+                    method.method_type = MethodType::Destructor;
+                    method.name = "Destructor".to_string();
+                    method.return_type_str = "void".to_string();
+                    let element = HppElement::Method(method);
+                    
+                    out_hpp_element.add_child(element);
+                }
+                _ => {
+                    unimplemented!("clang::EntityKind::Destructor")
                 }
             }
         }
