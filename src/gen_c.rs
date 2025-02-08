@@ -1,6 +1,6 @@
 use std::{fs, io::Write, path::{Path, PathBuf}, str::FromStr};
 
-use crate::parser::{self, GenContext, HppElement};
+use crate::gen_context::*;
 
 pub fn gen_c(gen_context: &GenContext, gen_out_dir: &str) {
     match gen_context.hpp_elements.first().unwrap() {
@@ -21,7 +21,7 @@ struct CFileContext<'a> {
     pub gen_context: &'a GenContext,
 }
 
-fn gen_c_file(gen_context: &GenContext, file: &parser::File, gen_out_dir: &str) {
+fn gen_c_file(gen_context: &GenContext, file: &File, gen_out_dir: &str) {
     let hpp_filename = Path::new(&file.path).file_name().unwrap().to_os_string().into_string().unwrap();
     let h_filename = hpp_filename.replace(".hpp", "_ffi.h");
     let ch_path = PathBuf::new().join(gen_out_dir).join(h_filename.clone()).into_os_string().into_string().unwrap();
@@ -65,7 +65,7 @@ fn gen_c_file(gen_context: &GenContext, file: &parser::File, gen_out_dir: &str) 
     cc_file.write_all(cc_str.as_bytes());
 }
 
-fn gen_c_class(c_context: &mut CFileContext, class: &parser::Class) {
+fn gen_c_class(c_context: &mut CFileContext, class: &Class) {
     let c_class_decl = format!("
 typedef long FFI_{};
 ", class.type_str);
@@ -86,13 +86,13 @@ c_context.ch_str.push_str(&c_class_decl);
     }
 }
 
-fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&parser::Class>, method: &parser::Method) {
+fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&Class>, method: &Method) {
     let mut cur_class_name = "";
     if let Some(cur_class) = class {
         cur_class_name = &cur_class.type_str;
     }
-    let is_normal_method = method.method_type == parser::MethodType::Normal;
-    let is_destructor = method.method_type == parser::MethodType::Destructor;
+    let is_normal_method = method.method_type == MethodType::Normal;
+    let is_destructor = method.method_type == MethodType::Destructor;
     // 是否需要加第一个类的实例参数，模拟调用类实例的方法
     let need_add_first_class_param= (is_normal_method && !cur_class_name.is_empty()) || is_destructor;
 
@@ -114,7 +114,7 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&parser::Class
     let impl_return_type = replace_class_to_ffi_str(c_context.gen_context, &method.return_type_str);
     let mut impl_str: String = "".to_string();
     match method.method_type {
-        parser::MethodType::Normal => {
+        MethodType::Normal => {
             // 普通类函数
             if !cur_class_name.is_empty() {
                 impl_str.push_str(&format!(" {{
@@ -130,12 +130,12 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&parser::Class
             }
         }
         // 构造函数
-        parser::MethodType::Constructor => {
+        MethodType::Constructor => {
             impl_str.push_str(&format!(" {{
     return ({})new {}(", 
                 impl_return_type, cur_class_name));
         }
-        parser::MethodType::Destructor => {
+        MethodType::Destructor => {
             impl_str.push_str(&format!(" {{
     {}* ptr = ({}*)obj;
     return delete ptr; //", 

@@ -7,12 +7,13 @@ GenContext {
                     type_str: "T1",
                     children: [
                         Method {
+                            method_type: Constructor,
                             name: "Constructor",
                             return_type_str: "T1*",
                             params: [],
-                            method_type: Constructor,
                         },
                         Method {
+                            method_type: Constructor,
                             name: "Constructor_double",
                             return_type_str: "T1*",
                             params: [
@@ -21,15 +22,21 @@ GenContext {
                                     type_str: "double",
                                 },
                             ],
-                            method_type: Constructor,
                         },
                         Method {
+                            method_type: Destructor,
+                            name: "Destructor",
+                            return_type_str: "void",
+                            params: [],
+                        },
+                        Method {
+                            method_type: Normal,
                             name: "createT1",
                             return_type_str: "T1 *",
                             params: [],
-                            method_type: Normal,
                         },
                         Method {
+                            method_type: Normal,
                             name: "prit",
                             return_type_str: "void",
                             params: [
@@ -38,9 +45,9 @@ GenContext {
                                     type_str: "int",
                                 },
                             ],
-                            method_type: Normal,
                         },
                         Method {
+                            method_type: Normal,
                             name: "add",
                             return_type_str: "int",
                             params: [
@@ -53,7 +60,6 @@ GenContext {
                                     type_str: "float",
                                 },
                             ],
-                            method_type: Normal,
                         },
                         Field {
                             name: "sum",
@@ -61,12 +67,13 @@ GenContext {
                     ],
                 },
                 Method {
+                    method_type: Normal,
                     name: "standalone_empty",
                     return_type_str: "void",
                     params: [],
-                    method_type: Normal,
                 },
                 Method {
+                    method_type: Normal,
                     name: "standalone_mutiply",
                     return_type_str: "double",
                     params: [
@@ -79,7 +86,6 @@ GenContext {
                             type_str: "T1 *",
                         },
                     ],
-                    method_type: Normal,
                 },
             ],
         },

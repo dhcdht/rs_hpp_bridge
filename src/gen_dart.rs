@@ -1,6 +1,6 @@
 use std::{fmt::format, fs, io::Write, path::{Path, PathBuf}};
 
-use crate::parser::{Class, GenContext, HppElement, Method};
+use crate::gen_context::*;
 
 pub fn gen_dart(gen_context: &GenContext, gen_out_dir: &str) {
     for hpp_element in &gen_context.hpp_elements {
@@ -63,8 +63,8 @@ void {}_setDylib(DynamicLibrary dylib) {{
             if let Some(cur_class) = local_ffiapi_gen_context.cur_class {
                 cur_class_name = &cur_class.type_str;
             }
-            let is_normal_method = method.method_type == crate::parser::MethodType::Normal;
-            let is_destructor = method.method_type == crate::parser::MethodType::Destructor;
+            let is_normal_method = method.method_type == MethodType::Normal;
+            let is_destructor = method.method_type == MethodType::Destructor;
             // 是否需要加第一个类的实例参数，模拟调用类实例的方法
             let need_add_first_class_param= (is_normal_method && !cur_class_name.is_empty()) || is_destructor;
             let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
@@ -172,19 +172,19 @@ class {} {{
                 cur_class_name = &cur_class.type_str;
             }
             let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
-            let is_normal_method = method.method_type == crate::parser::MethodType::Normal;
-            let is_destructor = method.method_type == crate::parser::MethodType::Destructor;
+            let is_normal_method = method.method_type == MethodType::Normal;
+            let is_destructor = method.method_type == MethodType::Destructor;
             // 是否需要加第一个类的实例参数，模拟调用类实例的方法
             let need_add_first_class_param= (is_normal_method && !cur_class_name.is_empty()) || is_destructor;
             
             // 函数定义
             let mut dart_fun_impl = "".to_string();
             match method.method_type {
-                crate::parser::MethodType::Normal | crate::parser::MethodType::Destructor => {
+                MethodType::Normal | MethodType::Destructor => {
                     dart_fun_impl.push_str(&format!("    {} {}(", 
                         get_dart_fun_type_str(gen_context, &method.return_type_str), method.name));
                 }
-                crate::parser::MethodType::Constructor => {
+                MethodType::Constructor => {
                     dart_fun_impl.push_str(&format!("    {}.{}(", 
                         cur_class_name, method.name));
                 }
@@ -201,10 +201,10 @@ class {} {{
             dart_fun_impl.push_str(") {\n");
             // 函数实现
             match method.method_type {
-                crate::parser::MethodType::Normal | crate::parser::MethodType::Destructor => {
+                MethodType::Normal | MethodType::Destructor => {
                     dart_fun_impl.push_str(&format!("        return {}(", ffiapi_c_method_name));
                 }
-                crate::parser::MethodType::Constructor => {
+                MethodType::Constructor => {
                     dart_fun_impl.push_str(&format!("        _nativePtr = {}(", ffiapi_c_method_name));
                 }
                 _ => {
