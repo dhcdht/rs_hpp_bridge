@@ -3,9 +3,6 @@ use std::{fs, io::Write, path::{Path, PathBuf}, str::FromStr};
 use crate::parser::{self, GenContext, HppElement};
 
 pub fn gen_c(gen_context: &GenContext, gen_out_dir: &str) {
-    fs::remove_dir_all(gen_out_dir);
-    fs::create_dir_all(gen_out_dir);
-
     match gen_context.hpp_elements.first().unwrap() {
         HppElement::File(file) => {
             gen_c_file(gen_context, file, gen_out_dir);
@@ -26,7 +23,7 @@ struct CFileContext<'a> {
 
 fn gen_c_file(gen_context: &GenContext, file: &parser::File, gen_out_dir: &str) {
     let hpp_filename = Path::new(&file.path).file_name().unwrap().to_os_string().into_string().unwrap();
-    let h_filename = hpp_filename.replace(".hpp", ".h");
+    let h_filename = hpp_filename.replace(".hpp", "_ffi.h");
     let ch_path = PathBuf::new().join(gen_out_dir).join(h_filename.clone()).into_os_string().into_string().unwrap();
     let mut ch_file = fs::File::create(ch_path).unwrap();
 
@@ -65,10 +62,10 @@ fn gen_c_file(gen_context: &GenContext, file: &parser::File, gen_out_dir: &str) 
 }
 
 fn gen_c_class(c_context: &mut CFileContext, class: &parser::Class) {
-    let c_class_del = format!("
+    let c_class_decl = format!("
 typedef long FFI_{};
 ", class.type_str);
-c_context.ch_str.push_str(&c_class_del);
+c_context.ch_str.push_str(&c_class_decl);
 
     for child in &class.children {
         match child {
@@ -83,15 +80,15 @@ c_context.ch_str.push_str(&c_class_del);
 }
 
 fn gen_c_class_method(c_context: &mut CFileContext, class: &parser::Class, method: &parser::Method) {
-    let mut method_del = format!("{} ffi_{}_{}(", method.return_type_str, class.type_str, method.name);
-    method_del = replace_class_name_in_str(c_context.gen_context, &method_del);
-    method_del.push_str(&format!("FFI_{} obj", class.type_str));
+    let mut method_decl = format!("{} ffi_{}_{}(", method.return_type_str, class.type_str, method.name);
+    method_decl = replace_class_name_in_str(c_context.gen_context, &method_decl);
+    method_decl.push_str(&format!("FFI_{} obj", class.type_str));
     for param in &method.params {
-        method_del.push_str(&format!(", {} {}", param.type_str, param.name));
+        method_decl.push_str(&format!(", {} {}", param.type_str, param.name));
     }
-    method_del.push_str(")");
-    let mut method_impl = format!("{}", method_del);
-    method_del.push_str(";\n");
+    method_decl.push_str(")");
+    let mut method_impl = format!("{}", method_decl);
+    method_decl.push_str(";\n");
 
     let impl_return_type = replace_class_name_in_str(c_context.gen_context, &method.return_type_str);
     let mut impl_str = format!(" {{
@@ -107,7 +104,7 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: &parser::Class, metho
     impl_str.push_str(");\n};\n");
     method_impl.push_str(&impl_str);
 
-    c_context.ch_str.push_str(&method_del);
+    c_context.ch_str.push_str(&method_decl);
     c_context.cc_str.push_str(&method_impl);
 }
 
