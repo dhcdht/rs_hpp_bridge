@@ -1,4 +1,4 @@
-use std::{fs, io::Write, path::{Path, PathBuf}};
+use std::{fmt::format, fs, io::Write, path::{Path, PathBuf}};
 
 use crate::parser::{Class, GenContext, HppElement, Method};
 
@@ -176,8 +176,20 @@ class {} {{
             let need_add_first_class_param= is_normal_method && !cur_class_name.is_empty();
             
             // 函数定义
-            let mut dart_fun_impl = format!("    {} {}(", 
-            get_dart_fun_type_str(gen_context, &method.return_type_str), method.name);
+            let mut dart_fun_impl = "".to_string();
+            match method.method_type {
+                crate::parser::MethodType::Normal => {
+                    dart_fun_impl.push_str(&format!("    {} {}(", 
+                        get_dart_fun_type_str(gen_context, &method.return_type_str), method.name));
+                }
+                crate::parser::MethodType::Constructor => {
+                    dart_fun_impl.push_str(&format!("    {}.{}(", 
+                        cur_class_name, method.name));
+                }
+                _ => {
+                    unimplemented!("gen_dart_api: unknown method type")
+                }
+            }
             for param in &method.params {
                 dart_fun_impl.push_str(&format!("{} {}, ", get_dart_fun_type_str(gen_context, &param.type_str), param.name));
             }
@@ -186,7 +198,17 @@ class {} {{
             }
             dart_fun_impl.push_str(") {\n");
             // 函数实现
-            dart_fun_impl.push_str(&format!("        return {}(", ffiapi_c_method_name));
+            match method.method_type {
+                crate::parser::MethodType::Normal => {
+                    dart_fun_impl.push_str(&format!("        return {}(", ffiapi_c_method_name));
+                }
+                crate::parser::MethodType::Constructor => {
+                    dart_fun_impl.push_str(&format!("        _nativePtr = {}(", ffiapi_c_method_name));
+                }
+                _ => {
+                    unimplemented!("gen_dart_api: unknown method type")
+                }
+            }
             if need_add_first_class_param {
                 dart_fun_impl.push_str("_nativePtr, ");
             }
