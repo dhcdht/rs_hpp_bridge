@@ -26,4 +26,8 @@ private:
     float isum;
 };
 
+double standalone_mutiply(double a, T1* b) {
+    return a*b->sum;
+}
+
 #endif //TEST_HPP

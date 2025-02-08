@@ -98,13 +98,16 @@ impl fmt::Debug for HppElement {
 }
 
 fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::Entity, indent: usize) {
-    // for _ in 0..indent {
-    //     print!(" ");
+    // 打开这个可以用来调试查看 clang parser 解析到的数据
+    // {
+    //     for _ in 0..indent {
+    //         print!("  ");
+    //     }
+    //     println!("{:?}: {}", 
+    //         entity.get_kind(), 
+    //         entity.get_name().unwrap_or_default(),
+    //     );
     // }
-    // println!("{:?}: {}", 
-    //     entity.get_kind(), 
-    //     entity.get_name().unwrap_or_default(),
-    // );
 
     match entity.get_kind() {
         clang::EntityKind::ClassDecl => {
@@ -155,6 +158,18 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
             field.name = entity.get_name().unwrap_or_default();
 
             let mut element = HppElement::Field(field);
+            for child in entity.get_children() {
+                visit_parse_clang_entity(&mut element, &child, indent + 1);
+            }
+            out_hpp_element.add_child(element);
+        }
+        // 不属于类的独立函数
+        clang::EntityKind::FunctionDecl => 'block: {
+            let mut method = Method::default();
+            method.name = entity.get_name().unwrap_or_default();
+            method.return_type_str = entity.get_result_type().unwrap().get_display_name();
+
+            let mut element = HppElement::Method(method);
             for child in entity.get_children() {
                 visit_parse_clang_entity(&mut element, &child, indent + 1);
             }

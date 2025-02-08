@@ -40,6 +40,20 @@ GenContext {
                         },
                     ],
                 },
+                Method {
+                    name: "standalone_mutiply",
+                    return_type_str: "double",
+                    params: [
+                        MethodParam {
+                            name: "a",
+                            type_str: "double",
+                        },
+                        MethodParam {
+                            name: "b",
+                            type_str: "T1 *",
+                        },
+                    ],
+                },
             ],
         },
     ],

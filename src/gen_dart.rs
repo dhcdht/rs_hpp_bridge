@@ -47,48 +47,54 @@ void {}_setDylib(DynamicLibrary dylib) {{
         }
         HppElement::Class(class) => {
             let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
-            local_ffiapi_gen_context.cur_class = Some(class);
             
+            local_ffiapi_gen_context.cur_class = Some(class);
             for hpp_element in &class.children {
                 gen_dart_ffiapi(gen_context, hpp_element, gen_out_dir, Some(local_ffiapi_gen_context));
             }
+            local_ffiapi_gen_context.cur_class = None;
         }
         HppElement::Method(method) => {
             let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
             let mut ffiapi_file = local_ffiapi_gen_context.ffiapi_file.as_mut().unwrap();
-            // 函数属于某个类
+
+            // 独立函数和类的函数，都走下边逻辑，需要注意区分
+            let mut cur_class_name = "";
             if let Some(cur_class) = local_ffiapi_gen_context.cur_class {
-                let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class.type_str, method.name);
-
-                // dart函数
-                let mut dart_fun_decl = format!("late final {} = ptr_{}.asFunction<{} Function(int, ",
-                    ffiapi_c_method_name, ffiapi_c_method_name, get_ffiapi_dart_fun_type_str(gen_context, &method.return_type_str),
-                );
-                for param in &method.params {
-                    dart_fun_decl.push_str(&get_ffiapi_dart_fun_type_str(gen_context, &param.type_str));
-                    dart_fun_decl.push_str(", ");
-                }
-                dart_fun_decl.truncate(dart_fun_decl.len() - ", ".len());   // 去掉最后一个参数的, 
-                dart_fun_decl.push_str(")>();\n");
-                ffiapi_file.write(dart_fun_decl.as_bytes());
-
-                // native函数指针
-                let mut native_fun_decl = format!("late final ptr_{} = _dylib.lookup<NativeFunction<{} Function(Int64, ", 
-                ffiapi_c_method_name, get_ffiapi_native_fun_type_str(gen_context, &method.return_type_str));
-                for param in &method.params {
-                    native_fun_decl.push_str(&get_ffiapi_native_fun_type_str(gen_context, &param.type_str));
-                    native_fun_decl.push_str(", ");
-                }
-                native_fun_decl.truncate(native_fun_decl.len() - ", ".len());   // 去掉最后一个参数的, 
-                native_fun_decl.push_str(&format!(")>>('{}');\n", ffiapi_c_method_name));
-                ffiapi_file.write(native_fun_decl.as_bytes());
-
-                ffiapi_file.write("\n".as_bytes());
+                cur_class_name = &cur_class.type_str;
             }
-            // 函数是独立函数
-            else {
-                unimplemented!("Standalone method handling is not implemented yet");
+            let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
+
+            // dart函数
+            let mut dart_fun_decl = format!("late final {} = ptr_{}.asFunction<{} Function(",
+                ffiapi_c_method_name, ffiapi_c_method_name, get_ffiapi_dart_fun_type_str(gen_context, &method.return_type_str),
+            );
+            if !cur_class_name.is_empty() {
+                dart_fun_decl.push_str("int, ");
             }
+            for param in &method.params {
+                dart_fun_decl.push_str(&get_ffiapi_dart_fun_type_str(gen_context, &param.type_str));
+                dart_fun_decl.push_str(", ");
+            }
+            dart_fun_decl.truncate(dart_fun_decl.len() - ", ".len());   // 去掉最后一个参数的, 
+            dart_fun_decl.push_str(")>();\n");
+            ffiapi_file.write(dart_fun_decl.as_bytes());
+
+            // native函数指针
+            let mut native_fun_decl = format!("late final ptr_{} = _dylib.lookup<NativeFunction<{} Function(", 
+            ffiapi_c_method_name, get_ffiapi_native_fun_type_str(gen_context, &method.return_type_str));
+            if !cur_class_name.is_empty() {
+                native_fun_decl.push_str("Int64, ");
+            }
+            for param in &method.params {
+                native_fun_decl.push_str(&get_ffiapi_native_fun_type_str(gen_context, &param.type_str));
+                native_fun_decl.push_str(", ");
+            }
+            native_fun_decl.truncate(native_fun_decl.len() - ", ".len());   // 去掉最后一个参数的, 
+            native_fun_decl.push_str(&format!(")>>('{}');\n", ffiapi_c_method_name));
+            ffiapi_file.write(native_fun_decl.as_bytes());
+
+            ffiapi_file.write("\n".as_bytes());
         }
         _ => {
             

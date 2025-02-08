@@ -51,6 +51,10 @@ fn gen_c_file(gen_context: &GenContext, file: &parser::File, gen_out_dir: &str) 
             HppElement::Class(class) => {
                 gen_c_class(&mut c_context, class);
             }
+            // 独立函数
+            HppElement::Method(method) => {
+                gen_c_class_method(&mut c_context, None, method);
+            }
             _ => {
 
             }
@@ -70,7 +74,7 @@ c_context.ch_str.push_str(&c_class_decl);
     for child in &class.children {
         match child {
             HppElement::Method(method) => {
-                gen_c_class_method(c_context, &class, method);
+                gen_c_class_method(c_context, Some(&class), method);
             }
             _ => {
 
@@ -79,27 +83,44 @@ c_context.ch_str.push_str(&c_class_decl);
     }
 }
 
-fn gen_c_class_method(c_context: &mut CFileContext, class: &parser::Class, method: &parser::Method) {
-    let mut method_decl = format!("{} ffi_{}_{}(", method.return_type_str, class.type_str, method.name);
-    method_decl = replace_class_name_in_str(c_context.gen_context, &method_decl);
-    method_decl.push_str(&format!("FFI_{} obj", class.type_str));
-    for param in &method.params {
-        method_decl.push_str(&format!(", {} {}", param.type_str, param.name));
+fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&parser::Class>, method: &parser::Method) {
+    let mut cur_class_name = "";
+    if let Some(cur_class) = class {
+        cur_class_name = &cur_class.type_str;
     }
+
+    let mut method_decl = format!("{} ffi_{}_{}(", method.return_type_str, cur_class_name, method.name);
+    if !cur_class_name.is_empty() {
+        method_decl.push_str(&format!("FFI_{} obj, ", cur_class_name));
+    }
+    for param in &method.params {
+        method_decl.push_str(&format!("{} {}", param.type_str, param.name));
+        method_decl.push_str(", ");
+    }
+    method_decl.truncate(method_decl.len() - ", ".len()); // 去掉最后一个参数的, 
+    method_decl = replace_class_to_ffi_str(c_context.gen_context, &method_decl);
     method_decl.push_str(")");
     let mut method_impl = format!("{}", method_decl);
     method_decl.push_str(";\n");
 
-    let impl_return_type = replace_class_name_in_str(c_context.gen_context, &method.return_type_str);
-    let mut impl_str = format!(" {{
+    let impl_return_type = replace_class_to_ffi_str(c_context.gen_context, &method.return_type_str);
+    let mut impl_str: String = "".to_string();
+    if !cur_class_name.is_empty() {
+        impl_str.push_str(&format!(" {{
     {}* ptr = ({}*)obj;
-    return ({})ptr->{}(", class.type_str, class.type_str, impl_return_type, method.name);
+    return ({})ptr->{}(", 
+            cur_class_name, cur_class_name, impl_return_type, method.name));
+    } else {
+        impl_str.push_str(&format!(" {{
+    return ({}){}(", 
+            impl_return_type, method.name));
+    }
     for param in &method.params {
-        impl_str.push_str(&format!("{}", param.name));
+        impl_str.push_str(&format!("({}){}", replace_ffi_to_class_str(c_context.gen_context, &param.type_str), param.name));
         impl_str.push_str(", ");
     }
     if !method.params.is_empty() {
-        impl_str.truncate(impl_str.len() - ", ".len());
+        impl_str.truncate(impl_str.len() - ", ".len()); // 去掉最后一个参数的, 
     }
     impl_str.push_str(");\n};\n");
     method_impl.push_str(&impl_str);
@@ -108,11 +129,20 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: &parser::Class, metho
     c_context.cc_str.push_str(&method_impl);
 }
 
-fn replace_class_name_in_str(gen_context: &GenContext, str: &str) -> String {
+fn replace_class_to_ffi_str(gen_context: &GenContext, str: &str) -> String {
     let mut ret = String::from_str(str).unwrap();
     for class_name in &gen_context.class_names {
         ret = ret.replace(&format!("{} *", class_name), &format!("FFI_{}", class_name));
         ret = ret.replace(&format!("{}*", class_name), &format!("FFI_{}", class_name));
+    }
+
+    return ret;
+}
+
+fn replace_ffi_to_class_str(gen_context: &GenContext, str: &str) -> String {
+    let mut ret = String::from_str(str).unwrap();
+    for class_name in &gen_context.class_names {
+        ret = ret.replace(&format!("FFI_{}", class_name), &format!("{}*", class_name));
     }
 
     return ret;
