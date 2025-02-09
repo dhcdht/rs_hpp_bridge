@@ -32,12 +32,21 @@ fn gen_c_file(gen_context: &GenContext, file: &File, gen_out_dir: &str) {
     let mut cc_file = fs::File::create(cc_path).unwrap();
 
     let mut ch_str = String::new();
+    // 公共头
     let ch_header = r#"
 #include <stdio.h>
+
+extern "C" {
 "#;
     ch_str.push_str(&ch_header);
     let mut cc_str = String::new();
-    let cc_header = format!("\n#include \"{}\"\n#include \"{}\"\n\n", h_filename, hpp_filename);
+    let cc_header = format!("
+#include \"{}\"
+#include \"{}\"
+
+extern \"C\" {{
+
+", h_filename, hpp_filename);
     cc_str.push_str(&cc_header);
 
     let mut c_context = CFileContext{
@@ -60,6 +69,16 @@ fn gen_c_file(gen_context: &GenContext, file: &File, gen_out_dir: &str) {
             }
         }
     }
+
+    // 公共尾
+    let ch_footer = r#"
+} // extern "C"
+"#;
+    ch_str.push_str(&ch_footer);
+    let cc_footer = r#"
+} // extern "C"
+"#;
+    cc_str.push_str(&cc_footer);
 
     ch_file.write_all(ch_str.as_bytes());
     cc_file.write_all(cc_str.as_bytes());
