@@ -182,7 +182,7 @@ fn get_ffi_type_str(field_type: &FieldType) -> String {
             return format!("FFI_{}", field_type.type_str);
         }
         _ => {
-            return field_type.type_str.clone();
+            return field_type.full_str.clone();
         }
     }
 }

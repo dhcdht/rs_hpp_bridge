@@ -9,55 +9,177 @@ GenContext {
                         Method {
                             method_type: Constructor,
                             name: "Constructor",
-                            return_type_str: "T1*",
+                            return_type: FieldType {
+                                full_str: "T1 *",
+                                type_str: "T1",
+                                type_kind: Class,
+                                ptr_level: 1,
+                            },
                             params: [],
                         },
                         Method {
                             method_type: Constructor,
                             name: "Constructor_double",
-                            return_type_str: "T1*",
+                            return_type: FieldType {
+                                full_str: "T1 *",
+                                type_str: "T1",
+                                type_kind: Class,
+                                ptr_level: 1,
+                            },
                             params: [
                                 MethodParam {
                                     name: "d",
-                                    type_str: "double",
+                                    field_type: FieldType {
+                                        full_str: "double",
+                                        type_str: "double",
+                                        type_kind: Double,
+                                        ptr_level: 0,
+                                    },
                                 },
                             ],
                         },
                         Method {
                             method_type: Destructor,
                             name: "Destructor",
-                            return_type_str: "void",
+                            return_type: FieldType {
+                                full_str: "void",
+                                type_str: "void",
+                                type_kind: Void,
+                                ptr_level: 0,
+                            },
                             params: [],
                         },
                         Method {
                             method_type: Normal,
                             name: "createT1",
-                            return_type_str: "T1 *",
+                            return_type: FieldType {
+                                full_str: "T1 *",
+                                type_str: "T1",
+                                type_kind: Class,
+                                ptr_level: 1,
+                            },
                             params: [],
                         },
                         Method {
                             method_type: Normal,
                             name: "prit",
-                            return_type_str: "void",
+                            return_type: FieldType {
+                                full_str: "void",
+                                type_str: "void",
+                                type_kind: Void,
+                                ptr_level: 0,
+                            },
                             params: [
                                 MethodParam {
                                     name: "a",
-                                    type_str: "int",
+                                    field_type: FieldType {
+                                        full_str: "T1 *",
+                                        type_str: "T1",
+                                        type_kind: Class,
+                                        ptr_level: 1,
+                                    },
                                 },
                             ],
                         },
                         Method {
                             method_type: Normal,
                             name: "add",
-                            return_type_str: "int",
+                            return_type: FieldType {
+                                full_str: "int",
+                                type_str: "int",
+                                type_kind: Int64,
+                                ptr_level: 0,
+                            },
                             params: [
                                 MethodParam {
                                     name: "a",
-                                    type_str: "int",
+                                    field_type: FieldType {
+                                        full_str: "int",
+                                        type_str: "int",
+                                        type_kind: Int64,
+                                        ptr_level: 0,
+                                    },
                                 },
                                 MethodParam {
                                     name: "b",
-                                    type_str: "float",
+                                    field_type: FieldType {
+                                        full_str: "float",
+                                        type_str: "float",
+                                        type_kind: Float,
+                                        ptr_level: 0,
+                                    },
+                                },
+                            ],
+                        },
+                        Method {
+                            method_type: Normal,
+                            name: "intArr",
+                            return_type: FieldType {
+                                full_str: "void",
+                                type_str: "void",
+                                type_kind: Void,
+                                ptr_level: 0,
+                            },
+                            params: [
+                                MethodParam {
+                                    name: "a",
+                                    field_type: FieldType {
+                                        full_str: "int *",
+                                        type_str: "int",
+                                        type_kind: Int64,
+                                        ptr_level: 1,
+                                    },
+                                },
+                                MethodParam {
+                                    name: "size",
+                                    field_type: FieldType {
+                                        full_str: "int",
+                                        type_str: "int",
+                                        type_kind: Int64,
+                                        ptr_level: 0,
+                                    },
+                                },
+                            ],
+                        },
+                        Method {
+                            method_type: Normal,
+                            name: "floatPtrPtr",
+                            return_type: FieldType {
+                                full_str: "void",
+                                type_str: "void",
+                                type_kind: Void,
+                                ptr_level: 0,
+                            },
+                            params: [
+                                MethodParam {
+                                    name: "a",
+                                    field_type: FieldType {
+                                        full_str: "float **",
+                                        type_str: "float",
+                                        type_kind: Float,
+                                        ptr_level: 2,
+                                    },
+                                },
+                            ],
+                        },
+                        Method {
+                            method_type: Normal,
+                            name: "printString",
+                            return_type: FieldType {
+                                full_str: "void",
+                                type_str: "void",
+                                type_kind: Void,
+                                ptr_level: 0,
+                            },
+                            params: [
+                                MethodParam {
+                                    name: "str",
+                                    field_type: FieldType {
+                                        full_str: "char *",
+                                        type_str: "char",
+                                        type_kind: Char,
+                                        ptr_level: 1,
+                                    },
                                 },
                             ],
                         },
@@ -69,21 +191,41 @@ GenContext {
                 Method {
                     method_type: Normal,
                     name: "standalone_empty",
-                    return_type_str: "void",
+                    return_type: FieldType {
+                        full_str: "void",
+                        type_str: "void",
+                        type_kind: Void,
+                        ptr_level: 0,
+                    },
                     params: [],
                 },
                 Method {
                     method_type: Normal,
                     name: "standalone_mutiply",
-                    return_type_str: "double",
+                    return_type: FieldType {
+                        full_str: "double",
+                        type_str: "double",
+                        type_kind: Double,
+                        ptr_level: 0,
+                    },
                     params: [
                         MethodParam {
                             name: "a",
-                            type_str: "double",
+                            field_type: FieldType {
+                                full_str: "double",
+                                type_str: "double",
+                                type_kind: Double,
+                                ptr_level: 0,
+                            },
                         },
                         MethodParam {
                             name: "b",
-                            type_str: "T1 *",
+                            field_type: FieldType {
+                                full_str: "T1 *",
+                                type_str: "T1",
+                                type_kind: Class,
+                                ptr_level: 1,
+                            },
                         },
                     ],
                 },

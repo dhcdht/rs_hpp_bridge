@@ -65,9 +65,10 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
                         updated_method.method_type = MethodType::Constructor;
                         updated_method.name = method_name;
                         updated_method.return_type = FieldType {
-                            full_str: format!("{}*", class.type_str),
+                            full_str: format!("{} *", class.type_str),
                             type_str: class.type_str.clone(),
                             type_kind: TypeKind::Class,
+                            ptr_level: 1,
                         };
                     }
                     out_hpp_element.add_child(element);
@@ -87,6 +88,7 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
                         full_str: "void".to_string(),
                         type_str: "void".to_string(),
                         type_kind: TypeKind::Void,
+                        ptr_level: 0,
                     };
                     let element = HppElement::Method(method);
                     

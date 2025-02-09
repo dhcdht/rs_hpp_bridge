@@ -65,6 +65,8 @@ pub enum TypeKind {
     Int64,
     Float,
     Double,
+    Char,
+
     Class,
 }
 
@@ -76,6 +78,8 @@ pub struct FieldType {
     /// 只是类型名，不包含修饰
     pub type_str: String,
     pub type_kind: TypeKind,
+    /// 几级指针，0 T, 1 T*, 2 T**
+    pub ptr_level: i32,
 }
 
 impl HppElement {
@@ -109,7 +113,14 @@ impl FieldType {
     pub fn from_clang_type(clang_type: &Option<clang::Type>) -> Self {
         let mut field_type = FieldType::default();
         field_type.full_str = clang_type.unwrap().get_display_name();
-        match field_type.full_str.to_lowercase().as_str() {
+        let lower_full_str = field_type.full_str.to_lowercase();
+
+        // 计算指针级别
+        let ptr_level = lower_full_str.chars().rev().take_while(|&c| c == '*').count();
+        field_type.ptr_level = ptr_level as i32;
+        
+        let lower_full_str_without_ptr = lower_full_str.trim_end_matches('*').trim();
+        match lower_full_str_without_ptr {
             "void" => {
                 field_type.type_kind = TypeKind::Void;
                 field_type.type_str = "void".to_string();
@@ -126,9 +137,21 @@ impl FieldType {
                 field_type.type_kind = TypeKind::Double;
                 field_type.type_str = "double".to_string();
             }
+            "char" => {
+                field_type.type_kind = TypeKind::Char;
+                field_type.type_str = "char".to_string();
+            }
             _ => {
-                field_type.type_kind = TypeKind::Class;
-                field_type.type_str = clang_type.unwrap().get_pointee_type().unwrap().get_display_name();
+                // 指针类型
+                if let Some(pointee) = clang_type.unwrap().get_pointee_type() {
+                    field_type.type_kind = TypeKind::Class;
+                    field_type.type_str = clang_type.unwrap().get_pointee_type().unwrap().get_display_name();
+                }
+                // 非指针类型 
+                else {
+                    field_type.type_kind = TypeKind::Class;
+                    field_type.type_str = clang_type.unwrap().get_display_name();
+                }
             }
             
         }

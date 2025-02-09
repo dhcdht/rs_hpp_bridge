@@ -12,10 +12,22 @@ public:
     T1* createT1() {
         return this;
     };
-    void prit(int a) {};
+    void prit(T1* a) {
+        std::cout << a->sum << std::endl;
+    };
     int add(int a, float b) {
         return a+b;
     };
+
+    void intArr(int* a, int size) {
+        *a = 10;
+    }
+    void floatPtrPtr(float** a) {
+        **a = 10.0f;
+    }
+    void printString(char* str) {
+        std::cout << str << std::endl;
+    }
 
 public:
     int sum;

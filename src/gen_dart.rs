@@ -128,6 +128,7 @@ fn gen_dart_api<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_o
             // 公共头
             let mut file_header = format!("
 import '{}';
+import 'dart:ffi';
             \n", dart_ffiapi_filename);
             dart_file.write(file_header.as_bytes());
 
@@ -144,6 +145,9 @@ import '{}';
             let mut class_header = format!("
 class {} {{
     late int _nativePtr;
+    int getNativePtr() {{
+        return _nativePtr;
+    }}
             \n", 
             class.type_str);
             dart_file_header.write(class_header.as_bytes());
@@ -233,47 +237,79 @@ class {} {{
 }
 
 fn get_dart_fun_type_str(field_type: &FieldType) -> String {
-    match field_type.type_kind {
-        TypeKind::Void => {
-            return "void".to_string();
-        }
-        TypeKind::Int64 => {
-            return "int".to_string();
-        }
-        TypeKind::Float => {
-            return "double".to_string();
-        }
-        TypeKind::Double => {
-            return "double".to_string();
-        }
-        TypeKind::Class => {
-            return "int".to_string();
-        }
-        _ => {
-            unimplemented!("get_dart_fun_type_str: unknown type kind");
+    // 基础数据类型
+    if field_type.ptr_level == 0 {
+        match field_type.type_kind {
+            TypeKind::Void => {
+                return "void".to_string();
+            }
+            TypeKind::Int64 => {
+                return "int".to_string();
+            }
+            TypeKind::Float => {
+                return "double".to_string();
+            }
+            TypeKind::Double => {
+                return "double".to_string();
+            }
+            TypeKind::Char => {
+                return "int".to_string();
+            }
+            _ => {
+                unimplemented!("get_dart_fun_type_str: unknown type kind");
+            }
         }
     }
+    // class指针
+    if field_type.type_kind == TypeKind::Class {
+        return "int".to_string();
+    }
+
+    // 基础类型的指针
+    return get_native_fun_type_str(field_type);
 }
 
 fn get_native_fun_type_str(field_type: &FieldType) -> String {
-    match field_type.type_kind {
-        TypeKind::Void => {
-            return "Void".to_string();
-        }
-        TypeKind::Int64 => {
-            return "Int64".to_string();
-        }
-        TypeKind::Float => {
-            return "Float".to_string();
-        }
-        TypeKind::Double => {
-            return "Double".to_string();
-        }
-        TypeKind::Class => {
-            return "Int64".to_string();
-        }
-        _ => {
-            unimplemented!("get_native_fun_type_str: unknown type kind");
+    // 基础数据类型
+    if field_type.ptr_level == 0 {
+        match field_type.type_kind {
+            TypeKind::Void => {
+                return "Void".to_string();
+            }
+            TypeKind::Int64 => {
+                return "Int64".to_string();
+            }
+            TypeKind::Float => {
+                return "Float".to_string();
+            }
+            TypeKind::Double => {
+                return "Double".to_string();
+            }
+            TypeKind::Char => {
+                return "Int8".to_string();
+            }
+            _ => {
+                unimplemented!("get_native_fun_type_str: unknown type kind");
+            }
         }
     }
+    // class指针
+    if field_type.type_kind == TypeKind::Class {
+        return "Int64".to_string();
+    }
+
+    // 基础类型的指针
+    let base_native = match field_type.type_kind {
+        TypeKind::Void => "Void",
+        TypeKind::Int64 => "Int64",
+        TypeKind::Float => "Float",
+        TypeKind::Double => "Double",
+        TypeKind::Char => "Int8",
+        _ => unimplemented!("get_native_fun_type_str: unknown type kind in pointer"),
+    };
+    let mut native_type = base_native.to_string();
+    for _ in 0..field_type.ptr_level {
+        native_type = format!("Pointer<{}>", native_type);
+    }
+    return native_type
 }
