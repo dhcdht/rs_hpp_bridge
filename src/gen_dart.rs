@@ -71,13 +71,13 @@ void {}_setDylib(DynamicLibrary dylib) {{
 
             // dart函数
             let mut dart_fun_decl = format!("late final {} = ptr_{}.asFunction<{} Function(",
-                ffiapi_c_method_name, ffiapi_c_method_name, get_dart_fun_type_str(gen_context, &method.return_type_str),
+                ffiapi_c_method_name, ffiapi_c_method_name, get_dart_fun_type_str(&method.return_type),
             );
             if need_add_first_class_param {
                 dart_fun_decl.push_str("int, ");
             }
             for param in &method.params {
-                dart_fun_decl.push_str(&get_dart_fun_type_str(gen_context, &param.type_str));
+                dart_fun_decl.push_str(&get_dart_fun_type_str(&param.field_type));
                 dart_fun_decl.push_str(", ");
             }
             if need_add_first_class_param || !method.params.is_empty() {
@@ -88,12 +88,12 @@ void {}_setDylib(DynamicLibrary dylib) {{
 
             // native函数指针
             let mut native_fun_decl = format!("late final ptr_{} = _dylib.lookup<NativeFunction<{} Function(", 
-            ffiapi_c_method_name, get_native_fun_type_str(gen_context, &method.return_type_str));
+            ffiapi_c_method_name, get_native_fun_type_str(&method.return_type));
             if need_add_first_class_param {
                 native_fun_decl.push_str("Int64, ");
             }
             for param in &method.params {
-                native_fun_decl.push_str(&get_native_fun_type_str(gen_context, &param.type_str));
+                native_fun_decl.push_str(&get_native_fun_type_str(&param.field_type));
                 native_fun_decl.push_str(", ");
             }
             if need_add_first_class_param || !method.params.is_empty() {
@@ -182,7 +182,7 @@ class {} {{
             match method.method_type {
                 MethodType::Normal | MethodType::Destructor => {
                     dart_fun_impl.push_str(&format!("    {} {}(", 
-                        get_dart_fun_type_str(gen_context, &method.return_type_str), method.name));
+                        get_dart_fun_type_str(&method.return_type), method.name));
                 }
                 MethodType::Constructor => {
                     dart_fun_impl.push_str(&format!("    {}.{}(", 
@@ -193,7 +193,7 @@ class {} {{
                 }
             }
             for param in &method.params {
-                dart_fun_impl.push_str(&format!("{} {}, ", get_dart_fun_type_str(gen_context, &param.type_str), param.name));
+                dart_fun_impl.push_str(&format!("{} {}, ", get_dart_fun_type_str(&param.field_type), param.name));
             }
             if !method.params.is_empty() {
                 dart_fun_impl.truncate(dart_fun_impl.len() - ", ".len());   // 去掉最后一个参数的, 
@@ -232,56 +232,48 @@ class {} {{
     }
 }
 
-fn get_dart_fun_type_str(gen_context: &GenContext, type_str: &str) -> String {
-    match type_str {
-        "void" => {
+fn get_dart_fun_type_str(field_type: &FieldType) -> String {
+    match field_type.type_kind {
+        TypeKind::Void => {
             return "void".to_string();
         }
-        "int" => {
+        TypeKind::Int64 => {
             return "int".to_string();
         }
-        "float" => {
+        TypeKind::Float => {
             return "double".to_string();
         }
-        "double" => {
+        TypeKind::Double => {
             return "double".to_string();
+        }
+        TypeKind::Class => {
+            return "int".to_string();
         }
         _ => {
-            for class_name in &gen_context.class_names {
-                if type_str == format!("{} *", class_name)
-                || type_str == format!("{}*", class_name) {
-                    return "int".to_string();
-                }
-            }
-
-            return "".to_string();
+            unimplemented!("get_dart_fun_type_str: unknown type kind");
         }
     }
 }
 
-fn get_native_fun_type_str(gen_context: &GenContext, type_str: &str) -> String {
-    match type_str {
-        "void" => {
+fn get_native_fun_type_str(field_type: &FieldType) -> String {
+    match field_type.type_kind {
+        TypeKind::Void => {
             return "Void".to_string();
         }
-        "int" => {
+        TypeKind::Int64 => {
             return "Int64".to_string();
         }
-        "float" => {
+        TypeKind::Float => {
             return "Float".to_string();
         }
-        "double" => {
+        TypeKind::Double => {
             return "Double".to_string();
         }
+        TypeKind::Class => {
+            return "Int64".to_string();
+        }
         _ => {
-            for class_name in &gen_context.class_names {
-                if type_str == format!("{} *", class_name)
-                || type_str == format!("{}*", class_name) {
-                    return "Int64".to_string();
-                }
-            }
-
-            return "".to_string();
+            unimplemented!("get_native_fun_type_str: unknown type kind");
         }
     }
 }

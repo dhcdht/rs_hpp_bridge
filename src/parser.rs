@@ -60,11 +60,15 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
                     if let HppElement::Method(ref mut updated_method) = element {
                         let mut method_name = format!("Constructor");
                         for param in &updated_method.params {
-                            method_name.push_str(&format!("_{}", param.type_str));
+                            method_name.push_str(&format!("_{}", param.field_type.type_str));
                         }
                         updated_method.method_type = MethodType::Constructor;
                         updated_method.name = method_name;
-                        updated_method.return_type_str = format!("{}*", class.type_str);
+                        updated_method.return_type = FieldType {
+                            full_str: format!("{}*", class.type_str),
+                            type_str: class.type_str.clone(),
+                            type_kind: TypeKind::Class,
+                        };
                     }
                     out_hpp_element.add_child(element);
                 }
@@ -79,7 +83,11 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
                     let mut method = Method::default();
                     method.method_type = MethodType::Destructor;
                     method.name = "Destructor".to_string();
-                    method.return_type_str = "void".to_string();
+                    method.return_type = FieldType {
+                        full_str: "void".to_string(),
+                        type_str: "void".to_string(),
+                        type_kind: TypeKind::Void,
+                    };
                     let element = HppElement::Method(method);
                     
                     out_hpp_element.add_child(element);
@@ -96,7 +104,7 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
 
             let mut method = Method::default();
             method.name = entity.get_name().unwrap_or_default();
-            method.return_type_str = entity.get_result_type().unwrap().get_display_name();
+            method.return_type = FieldType::from_clang_type(&entity.get_result_type());
 
             let mut element = HppElement::Method(method);
             for child in entity.get_children() {
@@ -109,7 +117,7 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
                 HppElement::Method(method) => {
                     let mut param = MethodParam::default();
                     param.name = entity.get_name().unwrap_or_default();
-                    param.type_str = entity.get_type().unwrap().get_display_name();
+                    param.field_type = FieldType::from_clang_type(&entity.get_type());
 
                     method.params.push(param);
                 }
@@ -136,7 +144,7 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
         clang::EntityKind::FunctionDecl => 'block: {
             let mut method = Method::default();
             method.name = entity.get_name().unwrap_or_default();
-            method.return_type_str = entity.get_result_type().unwrap().get_display_name();
+            method.return_type = FieldType::from_clang_type(&entity.get_result_type());
 
             let mut element = HppElement::Method(method);
             for child in entity.get_children() {

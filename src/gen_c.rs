@@ -115,22 +115,21 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&Class>, metho
     // 是否需要加第一个类的实例参数，模拟调用类实例的方法
     let need_add_first_class_param= (is_normal_method && !cur_class_name.is_empty()) || is_destructor;
 
-    let mut method_decl = format!("{} ffi_{}_{}(", method.return_type_str, cur_class_name, method.name);
+    let mut method_decl = format!("{} ffi_{}_{}(", get_ffi_type_str(&method.return_type), cur_class_name, method.name);
     if need_add_first_class_param {
         method_decl.push_str(&format!("FFI_{} obj, ", cur_class_name));
     }
     for param in &method.params {
-        method_decl.push_str(&format!("{} {}, ", param.type_str, param.name));
+        method_decl.push_str(&format!("{} {}, ", get_ffi_type_str(&param.field_type), param.name));
     }
     if need_add_first_class_param || !method.params.is_empty() {
         method_decl.truncate(method_decl.len() - ", ".len()); // 去掉最后一个参数的, 
     }
-    method_decl = replace_class_to_ffi_str(c_context.gen_context, &method_decl);
     method_decl.push_str(")");
     let mut method_impl = format!("{}", method_decl);
     method_decl.push_str(";\n");
 
-    let impl_return_type = replace_class_to_ffi_str(c_context.gen_context, &method.return_type_str);
+    let impl_return_type = get_ffi_type_str(&method.return_type);
     let mut impl_str: String = "".to_string();
     match method.method_type {
         MethodType::Normal => {
@@ -165,7 +164,7 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&Class>, metho
         }
     }
     for param in &method.params {
-        impl_str.push_str(&format!("({}){}, ", replace_ffi_to_class_str(c_context.gen_context, &param.type_str), param.name));
+        impl_str.push_str(&format!("({}){}, ", &param.field_type.full_str, param.name));
     }
     if !method.params.is_empty() {
         impl_str.truncate(impl_str.len() - ", ".len()); // 去掉最后一个参数的, 
@@ -177,21 +176,13 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&Class>, metho
     c_context.cc_str.push_str(&method_impl);
 }
 
-fn replace_class_to_ffi_str(gen_context: &GenContext, str: &str) -> String {
-    let mut ret = String::from_str(str).unwrap();
-    for class_name in &gen_context.class_names {
-        ret = ret.replace(&format!("{} *", class_name), &format!("FFI_{}", class_name));
-        ret = ret.replace(&format!("{}*", class_name), &format!("FFI_{}", class_name));
+fn get_ffi_type_str(field_type: &FieldType) -> String {
+    match field_type.type_kind {
+        TypeKind::Class => {
+            return format!("FFI_{}", field_type.type_str);
+        }
+        _ => {
+            return field_type.type_str.clone();
+        }
     }
-
-    return ret;
-}
-
-fn replace_ffi_to_class_str(gen_context: &GenContext, str: &str) -> String {
-    let mut ret = String::from_str(str).unwrap();
-    for class_name in &gen_context.class_names {
-        ret = ret.replace(&format!("FFI_{}", class_name), &format!("{}*", class_name));
-    }
-
-    return ret;
 }

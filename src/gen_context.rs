@@ -42,7 +42,7 @@ pub enum MethodType {
 pub struct Method {
     pub method_type: MethodType,
     pub name: String,
-    pub return_type_str: String,
+    pub return_type: FieldType,
     pub params: Vec<MethodParam>,
 }
 
@@ -54,7 +54,28 @@ pub struct Field {
 #[derive(Debug, Default)]
 pub struct MethodParam {
     pub name: String,
+    pub field_type: FieldType,
+}
+
+/// 类型的种类
+#[derive(Debug, Default, PartialEq, Eq)]
+pub enum TypeKind {
+    #[default]
+    Void,
+    Int64,
+    Float,
+    Double,
+    Class,
+}
+
+/// 返回值、字段、参数等的类型
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct FieldType {
+    /// 类型字符串，包含全修饰的类型名
+    pub full_str: String,
+    /// 只是类型名，不包含修饰
     pub type_str: String,
+    pub type_kind: TypeKind,
 }
 
 impl HppElement {
@@ -81,5 +102,37 @@ impl fmt::Debug for HppElement {
             Self::Method(arg0) => arg0.fmt(f),
             Self::Field(arg0) => arg0.fmt(f),
         }
+    }
+}
+
+impl FieldType {
+    pub fn from_clang_type(clang_type: &Option<clang::Type>) -> Self {
+        let mut field_type = FieldType::default();
+        field_type.full_str = clang_type.unwrap().get_display_name();
+        match field_type.full_str.to_lowercase().as_str() {
+            "void" => {
+                field_type.type_kind = TypeKind::Void;
+                field_type.type_str = "void".to_string();
+            }
+            "int" => {
+                field_type.type_kind = TypeKind::Int64;
+                field_type.type_str = "int".to_string();
+            }
+            "float" => {
+                field_type.type_kind = TypeKind::Float;
+                field_type.type_str = "float".to_string();
+            }
+            "double" => {
+                field_type.type_kind = TypeKind::Double;
+                field_type.type_str = "double".to_string();
+            }
+            _ => {
+                field_type.type_kind = TypeKind::Class;
+                field_type.type_str = clang_type.unwrap().get_pointee_type().unwrap().get_display_name();
+            }
+            
+        }
+
+        return field_type;
     }
 }
