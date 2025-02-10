@@ -25,6 +25,9 @@ pub struct Class {
     pub type_str: String,
 
     pub children: Vec<HppElement>,
+
+    /// 是否是抽象类，也就是用于 callback 的类
+    is_abstract: bool,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -106,6 +109,16 @@ impl fmt::Debug for HppElement {
             Self::Method(arg0) => arg0.fmt(f),
             Self::Field(arg0) => arg0.fmt(f),
         }
+    }
+}
+
+impl Class {
+    pub fn is_callback(&self) -> bool {
+        self.is_abstract
+    }
+
+    pub fn set_is_abstract(&mut self, is_abstract: bool) {
+        self.is_abstract = is_abstract;
     }
 }
 

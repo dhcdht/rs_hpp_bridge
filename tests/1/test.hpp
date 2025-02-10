@@ -3,6 +3,16 @@
 
 #include <iostream>
 
+class T1;
+class Callback1 {
+public:
+    Callback1() {};
+    virtual ~Callback1() {};
+
+    virtual void onCall(T1* t1) = 0;
+    virtual double onDoAdd(int a, float b) = 0;
+};
+
 class T1 {
 public:
     T1() {};
@@ -27,6 +37,11 @@ public:
     }
     void printString(char* str) {
         std::cout << str << std::endl;
+    }
+
+    void setCallback(Callback1* cb) {
+        cb->onDoAdd(this->sum, 2.0f);
+        cb->onCall(this);
     }
 
 public:

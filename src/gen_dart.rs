@@ -126,7 +126,7 @@ fn gen_dart_api<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_o
             let mut dart_file = fs::File::create(dart_path).unwrap();
 
             // 公共头
-            let mut file_header = format!("
+            let file_header = format!("
 import '{}';
 import 'dart:ffi';
             \n", dart_ffiapi_filename);
@@ -142,7 +142,7 @@ import 'dart:ffi';
 
             // 公共头
             let dart_file_header = local_dart_gen_context.cur_file.as_mut().unwrap();
-            let mut class_header = format!("
+            let class_header = format!("
 class {} {{
     late int _nativePtr;
     int getNativePtr() {{

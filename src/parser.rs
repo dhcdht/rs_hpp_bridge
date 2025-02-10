@@ -40,8 +40,16 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
 
     match entity.get_kind() {
         clang::EntityKind::ClassDecl => {
+            // 只是前置声明的话，忽略
+            if !entity.is_definition() {
+                return;
+            }
             let mut class = Class::default();
             class.type_str = entity.get_name().unwrap_or_default();
+            // 如果是抽象类
+            if entity.is_abstract_record() {
+                class.set_is_abstract(true);
+            }
 
             let mut element = HppElement::Class(class);
             for child in entity.get_children() {

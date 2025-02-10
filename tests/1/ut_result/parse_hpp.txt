@@ -4,6 +4,85 @@ GenContext {
             path: "./tests/1/test.hpp",
             children: [
                 Class {
+                    type_str: "Callback1",
+                    children: [
+                        Method {
+                            method_type: Constructor,
+                            name: "Constructor",
+                            return_type: FieldType {
+                                full_str: "Callback1 *",
+                                type_str: "Callback1",
+                                type_kind: Class,
+                                ptr_level: 1,
+                            },
+                            params: [],
+                        },
+                        Method {
+                            method_type: Destructor,
+                            name: "Destructor",
+                            return_type: FieldType {
+                                full_str: "void",
+                                type_str: "void",
+                                type_kind: Void,
+                                ptr_level: 0,
+                            },
+                            params: [],
+                        },
+                        Method {
+                            method_type: Normal,
+                            name: "onCall",
+                            return_type: FieldType {
+                                full_str: "void",
+                                type_str: "void",
+                                type_kind: Void,
+                                ptr_level: 0,
+                            },
+                            params: [
+                                MethodParam {
+                                    name: "t1",
+                                    field_type: FieldType {
+                                        full_str: "T1 *",
+                                        type_str: "T1",
+                                        type_kind: Class,
+                                        ptr_level: 1,
+                                    },
+                                },
+                            ],
+                        },
+                        Method {
+                            method_type: Normal,
+                            name: "onDoAdd",
+                            return_type: FieldType {
+                                full_str: "double",
+                                type_str: "double",
+                                type_kind: Double,
+                                ptr_level: 0,
+                            },
+                            params: [
+                                MethodParam {
+                                    name: "a",
+                                    field_type: FieldType {
+                                        full_str: "int",
+                                        type_str: "int",
+                                        type_kind: Int64,
+                                        ptr_level: 0,
+                                    },
+                                },
+                                MethodParam {
+                                    name: "b",
+                                    field_type: FieldType {
+                                        full_str: "float",
+                                        type_str: "float",
+                                        type_kind: Float,
+                                        ptr_level: 0,
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                    is_abstract: true,
+                },
+                Class {
                     type_str: "T1",
                     children: [
                         Method {
@@ -183,10 +262,32 @@ GenContext {
                                 },
                             ],
                         },
+                        Method {
+                            method_type: Normal,
+                            name: "setCallback",
+                            return_type: FieldType {
+                                full_str: "void",
+                                type_str: "void",
+                                type_kind: Void,
+                                ptr_level: 0,
+                            },
+                            params: [
+                                MethodParam {
+                                    name: "cb",
+                                    field_type: FieldType {
+                                        full_str: "Callback1 *",
+                                        type_str: "Callback1",
+                                        type_kind: Class,
+                                        ptr_level: 1,
+                                    },
+                                },
+                            ],
+                        },
                         Field {
                             name: "sum",
                         },
                     ],
+                    is_abstract: false,
                 },
                 Method {
                     method_type: Normal,
@@ -233,6 +334,7 @@ GenContext {
         },
     ],
     class_names: [
+        "Callback1",
         "T1",
     ],
 }
