@@ -234,16 +234,13 @@ c_context.cc_str.push_str(&c_class_callback_impl);
     for child in &class.children {
         match child {
             HppElement::Method(method) => {
-                // 这次只生成需要重写的回调函数
-                if method.method_type != MethodType::Normal {
-                    gen_c_class_method(c_context, Some(&class), method);
-                    // 作为回调的抽象类并不能new，所以这里换成可实例化的子类
-                    let form_new = format!("new {}", class.type_str);
-                    let to_new = format!("new {}", subclass_name);
-                    if let Some(pos) = c_context.cc_str.find(&form_new) {
-                        let end = pos + form_new.len();
-                        c_context.cc_str.replace_range(pos..end, &to_new);
-                    }
+                gen_c_class_method(c_context, Some(&class), method);
+                // 作为回调的抽象类并不能new，所以这里换成可实例化的子类
+                let form_new = format!("new {}", class.type_str);
+                let to_new = format!("new {}", subclass_name);
+                if let Some(pos) = c_context.cc_str.find(&form_new) {
+                    let end = pos + form_new.len();
+                    c_context.cc_str.replace_range(pos..end, &to_new);
                 }
             }
             HppElement::Field(field) => {
