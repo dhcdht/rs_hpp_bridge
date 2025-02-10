@@ -50,7 +50,11 @@ void {}_setDylib(DynamicLibrary dylib) {{
             
             local_ffiapi_gen_context.cur_class = Some(class);
             for hpp_element in &class.children {
-                gen_dart_ffiapi(gen_context, hpp_element, gen_out_dir, Some(local_ffiapi_gen_context));
+                if class.is_callback() {
+                    gen_dart_ffiapi_for_callback(gen_context, hpp_element, gen_out_dir, Some(local_ffiapi_gen_context));
+                } else {
+                    gen_dart_ffiapi(gen_context, hpp_element, gen_out_dir, Some(local_ffiapi_gen_context));
+                }
             }
             local_ffiapi_gen_context.cur_class = None;
         }
@@ -312,4 +316,64 @@ fn get_native_fun_type_str(field_type: &FieldType) -> String {
         native_type = format!("Pointer<{}>", native_type);
     }
     return native_type
+}
+
+/// 为回调类生成dart ffiapi
+fn gen_dart_ffiapi_for_callback<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_out_dir: &str, ffiapi_gen_context: Option<&mut DartGenContext<'a>>) {
+    match hpp_element {
+        HppElement::Method(method) => {
+            let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
+            let ffiapi_file = local_ffiapi_gen_context.cur_file.as_mut().unwrap();
+
+            // 独立函数和类的函数，都走下边逻辑，需要注意区分
+            let mut cur_class_name = "";
+            if let Some(cur_class) = local_ffiapi_gen_context.cur_class {
+                cur_class_name = &cur_class.type_str;
+            }
+            let is_normal_method = method.method_type == MethodType::Normal;
+            let is_destructor = method.method_type == MethodType::Destructor;
+            // 是否需要加第一个类的实例参数，模拟调用类实例的方法
+            let need_add_first_class_param= (is_normal_method && !cur_class_name.is_empty()) || is_destructor;
+            let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
+
+            // dart函数
+            let mut dart_fun_decl = format!("late final {} = ptr_{}.asFunction<{} Function(",
+                ffiapi_c_method_name, ffiapi_c_method_name, get_dart_fun_type_str(&method.return_type),
+            );
+            if need_add_first_class_param {
+                dart_fun_decl.push_str("int, ");
+            }
+            for param in &method.params {
+                dart_fun_decl.push_str(&get_dart_fun_type_str(&param.field_type));
+                dart_fun_decl.push_str(", ");
+            }
+            if need_add_first_class_param || !method.params.is_empty() {
+                dart_fun_decl.truncate(dart_fun_decl.len() - ", ".len());   // 去掉最后一个参数的, 
+            }
+            dart_fun_decl.push_str(")>();\n");
+            ffiapi_file.write(dart_fun_decl.as_bytes());
+
+            // native函数指针
+            let mut native_fun_decl = format!("late final ptr_{} = _dylib.lookup<NativeFunction<{} Function(", 
+            ffiapi_c_method_name, get_native_fun_type_str(&method.return_type));
+            if need_add_first_class_param {
+                native_fun_decl.push_str("Int64, ");
+            }
+            for param in &method.params {
+                native_fun_decl.push_str(&get_native_fun_type_str(&param.field_type));
+                native_fun_decl.push_str(", ");
+            }
+            if need_add_first_class_param || !method.params.is_empty() {
+                native_fun_decl.truncate(native_fun_decl.len() - ", ".len());   // 去掉最后一个参数的, 
+                
+            }
+            native_fun_decl.push_str(&format!(")>>('{}');\n", ffiapi_c_method_name));
+            ffiapi_file.write(native_fun_decl.as_bytes());
+
+            ffiapi_file.write("\n".as_bytes());
+        }
+        _ => {
+            unimplemented!("gen_dart_ffiapi_for_callback: unknown child");
+        }
+    }
 }
