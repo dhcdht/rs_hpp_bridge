@@ -111,97 +111,11 @@ c_context.ch_str.push_str(&c_class_decl);
 }
 
 fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&Class>, method: &Method) {
-    let mut cur_class_name = "";
-    if let Some(cur_class) = class {
-        cur_class_name = &cur_class.type_str;
-    }
-    let is_normal_method = method.method_type == MethodType::Normal;
-    let is_destructor = method.method_type == MethodType::Destructor;
-    // 是否需要加第一个类的实例参数，模拟调用类实例的方法
-    let need_add_first_class_param= (is_normal_method && !cur_class_name.is_empty()) || is_destructor;
+    let method_decl = get_str_method_decl(class, method);
+    let method_impl = get_str_method_impl(class, method);
 
-    let mut method_decl = format!("{} ffi_{}_{}(", get_ffi_type_str(&method.return_type), cur_class_name, method.name);
-    if need_add_first_class_param {
-        if is_destructor {
-            method_decl.push_str(&format!("void* obj, "));
-        } else {
-            method_decl.push_str(&format!("FFI_{} obj, ", cur_class_name));
-        }
-    }
-    for param in &method.params {
-        method_decl.push_str(&format!("{} {}, ", get_ffi_type_str(&param.field_type), param.name));
-    }
-    if need_add_first_class_param || !method.params.is_empty() {
-        method_decl.truncate(method_decl.len() - ", ".len()); // 去掉最后一个参数的, 
-    }
-    method_decl.push_str(")");
-    let mut method_impl = format!("{}", method_decl);
-    method_decl.push_str(";\n");
-
-    let impl_return_type = get_ffi_type_str(&method.return_type);
-    let mut impl_str: String = "".to_string();
-    match method.method_type {
-        MethodType::Normal => {
-            // 普通类函数
-            if !cur_class_name.is_empty() {
-                if method.return_type.type_kind == TypeKind::String {
-                    impl_str.push_str(&format!(" {{
-    {}* ptr = ({}*)obj;
-    static std::string retStr = ptr->{}(", 
-                    cur_class_name, cur_class_name, method.name));
-                } 
-                else {
-                    impl_str.push_str(&format!(" {{
-    {}* ptr = ({}*)obj;
-    return ({})ptr->{}(", 
-                    cur_class_name, cur_class_name, impl_return_type, method.name));
-                }
-            } 
-            // 独立函数
-            else {
-                impl_str.push_str(&format!(" {{
-    return ({}){}(", 
-                    impl_return_type, method.name));
-            }
-        }
-        // 构造函数
-        MethodType::Constructor => {
-            impl_str.push_str(&format!(" {{
-    return ({})new {}(", 
-                impl_return_type, cur_class_name));
-        }
-        MethodType::Destructor => {
-            impl_str.push_str(&format!(" {{
-    {}* ptr = ({}*)obj;
-    if (ptr != nullptr) {{
-        return delete ptr;
-    }} //", 
-                cur_class_name, cur_class_name));
-        }
-        _ => {
-            unimplemented!("gen_c_class_method: unknown method type");
-        }
-    }
-    for param in &method.params {
-        if param.field_type.type_kind == TypeKind::String {
-            impl_str.push_str(&format!("std::string({}), ", param.name));
-        } else {
-            impl_str.push_str(&format!("({}){}, ", &param.field_type.full_str, param.name));
-        }
-    }
-    if !method.params.is_empty() {
-        impl_str.truncate(impl_str.len() - ", ".len()); // 去掉最后一个参数的, 
-    }
-    if method.return_type.type_kind == TypeKind::String {
-        impl_str.push_str(");\n    return (const char*)retStr.c_str();\n};\n");
-    } else {
-        impl_str.push_str(");\n};\n");
-        
-    }
-    method_impl.push_str(&impl_str);
-
-    c_context.ch_str.push_str(&method_decl);
-    c_context.cc_str.push_str(&method_impl);
+    c_context.ch_str.push_str(format!("{}\n", method_decl).as_str());
+    c_context.cc_str.push_str(format!("{}\n", method_impl).as_str());
 }
 
 /// 回调类
@@ -323,7 +237,7 @@ fn gen_c_callback_class_method(c_context: &mut CFileContext, class: Option<&Clas
         return {}(({})this, ", 
         fun_ptr_var_str, ffi_class_name));
     for param in &method.params {
-        c_class_callback_method_impl.push_str(&format!("({}){}, ", get_ffi_type_str(&param.field_type), param.name));
+        c_class_callback_method_impl.push_str(&format!("({}){}, ", get_str_ffi_type(&param.field_type), param.name));
     }
     if !method.params.is_empty() {
         c_class_callback_method_impl.truncate(c_class_callback_method_impl.len() - ", ".len()); // 去掉最后一个参数的, 
@@ -344,22 +258,17 @@ fn gen_c_callback_regist_decl(c_context: &mut CFileContext, class: Option<&Class
     let fun_ptr_type_str = format!("{}_{}", ffi_class_name, method.name);
     // 指向函数指针的变量
     let fun_ptr_var_str = format!("{}_{}", class.unwrap().type_str, method.name);
+    let params_decl_str = get_str_params_decl(class, method);
 
     // .h 中的声明
     // 1. 函数指针类型声明
-    let mut c_class_callback_method_decl = format!("typedef {} (*{})(", 
-        get_ffi_type_str(&method.return_type), fun_ptr_type_str);
-    c_class_callback_method_decl.push_str(&format!("{} obj, ", ffi_class_name));
-    for param in &method.params {
-        c_class_callback_method_decl.push_str(&format!("{} {}, ", get_ffi_type_str(&param.field_type), param.name));
-    }
-    if !method.params.is_empty() {
-        c_class_callback_method_decl.truncate(c_class_callback_method_decl.len() - ", ".len()); // 去掉最后一个参数的, 
-    }
-    c_class_callback_method_decl.push_str(");\n");
     // 2. 注册函数指针的函数声明
-    c_class_callback_method_decl.push_str(&format!("void {}_regist({} {});\n"
-        , fun_ptr_type_str, fun_ptr_type_str, method.name));
+    let c_class_callback_method_decl = format!("typedef {} (*{})({});
+void {}_regist({} {});
+",
+        get_str_ffi_type(&method.return_type), fun_ptr_type_str, params_decl_str,
+        fun_ptr_type_str, fun_ptr_type_str, method.name
+    );
     c_context.ch_str.push_str(&c_class_callback_method_decl);
 
     // .cpp 中的实现
@@ -388,7 +297,7 @@ fn gen_c_callback_regist_impl(c_context: &mut CFileContext, class: Option<&Class
     c_context.cc_str.push_str(&fun_ptr_impl);
 }
 
-fn get_ffi_type_str(field_type: &FieldType) -> String {
+fn get_str_ffi_type(field_type: &FieldType) -> String {
     match field_type.type_kind {
         TypeKind::Void | TypeKind::Int64 | TypeKind::Float | TypeKind::Double | TypeKind::Char => {
             return field_type.full_str.clone();
@@ -403,4 +312,141 @@ fn get_ffi_type_str(field_type: &FieldType) -> String {
             unimplemented!("get_ffi_type_str: unknown type kind");
         }
     }
+}
+
+fn get_str_method_decl(class: Option<&Class>, method: &Method) -> String {
+    let ffi_decl_name = get_str_ffi_decl_class_name(class, method);
+    let params = get_str_params_decl(class, method);
+    let method_decl = format!("{} {}({});", 
+        get_str_ffi_type(&method.return_type), ffi_decl_name, params);
+
+    return method_decl;
+}
+
+fn get_str_method_impl(class: Option<&Class>, method: &Method) -> String {
+    let decl_class_name = get_str_decl_class_name(class, method);
+    let method_decl = get_str_method_decl(class, method);
+    // 去掉函数定义的最后一个分号，作为函数实现的第一行
+    let method_prefix = method_decl.trim_end_matches(";");
+    let (param_prefix, param_str) = get_str_params_impl(class, method);
+    let impl_return_type = get_str_ffi_type(&method.return_type);
+
+    let mut method_impl = String::new();
+    match method.method_type {
+        MethodType::Constructor => {
+            method_impl = format!("{} {{
+    {}
+    return ({})new {}({});
+}};", method_prefix, param_prefix, impl_return_type, decl_class_name, param_str);
+        }
+        MethodType::Destructor => {
+            method_impl = format!("{} {{
+    {}
+    if (ptr != nullptr) {{
+        return delete ptr;
+    }}
+}};", method_prefix, param_prefix)
+        }
+        MethodType::Normal => {
+            let call_prefix = if decl_class_name.is_empty() { "" } else { "ptr->" };
+            if method.return_type.type_kind == TypeKind::String {
+                method_impl = format!("{} {{
+    {}
+    static std::string retStr = {}{}({});
+    return (const char*)retStr.c_str();
+}};", method_prefix, param_prefix, call_prefix, method.name, param_str);
+            } else {
+                method_impl = format!("{} {{
+    {}
+    return ({}){}{}({});
+}};", method_prefix, param_prefix, impl_return_type, call_prefix, method.name, param_str);
+            }
+        }
+        _ => {
+            unimplemented!("gen_c_class_method_impl: unknown method type");
+        }
+    }
+
+    return method_impl
+}
+
+/// 函数是不是需要加第一个类的实例参数，模拟调用类实例的调用方法
+fn get_is_need_first_class_param(class: Option<&Class>, method: &Method) -> bool {
+    match method.method_type {
+        MethodType::Constructor => {
+            return false;
+        }
+        MethodType::Destructor => {
+            return true;
+        }
+        MethodType::Normal => {
+            if class.is_some() {
+                return true;
+            }
+            return false;
+        }
+        _ => {
+            unimplemented!("method_get_is_need_first_class_param: unknown method type");
+        }
+    }
+}
+
+/// 返回函数的类名前缀或者空字符串
+fn get_str_decl_class_name<'a>(class: Option<&'a Class>, method: &Method) -> &'a str {
+    if let Some(cur_class) = class {
+        return &cur_class.type_str;
+    }
+    return "";
+}
+
+/// 返回函数的 ffi 声明名
+fn get_str_ffi_decl_class_name(class: Option<&Class>, method: &Method) -> String {
+    let mut cur_class_name = "";
+    if let Some(cur_class) = class {
+        cur_class_name = &cur_class.type_str;
+    }
+
+    return format!("ffi_{}_{}", cur_class_name, method.name);
+}
+
+/// 返回声明参数列表字符串
+fn get_str_params_decl(class: Option<&Class>, method: &Method) -> String {
+    let mut param_strs = Vec::new();
+    if get_is_need_first_class_param(class, method) {
+        if method.method_type == MethodType::Destructor {
+            param_strs.push("void* obj".to_string());
+        } else {
+            param_strs.push(format!("FFI_{} obj", get_str_decl_class_name(class, method)));
+        }
+    }
+    for param in &method.params {
+        param_strs.push(format!("{} {}", get_str_ffi_type(&param.field_type), param.name));
+    }
+
+    return param_strs.join(", ");
+}
+
+/// 返回实现中的调用参数列表字符串，(前置条件, 调用参数)
+fn get_str_params_impl(class: Option<&Class>, method: &Method) -> (String, String) {
+    let mut param_prefixs = Vec::new();
+    let mut param_strs = Vec::new();
+    if get_is_need_first_class_param(class, method) {
+        if let Some(cur_class) = class {
+            param_prefixs.push(format!("{}* ptr = ({}*)obj;", cur_class.type_str, cur_class.type_str));
+        } else {
+            unimplemented!("method_build_params_impl: need first class param but class is None");
+        }
+    }
+
+    for param in &method.params {
+        if param.field_type.type_kind == TypeKind::String {
+            param_strs.push(format!("std::string({})", param.name));
+        } else {
+            param_strs.push(format!("({}){}", &param.field_type.full_str, param.name));
+        }
+    }
+
+    let param_prefixs_str = param_prefixs.join("\n");
+    let param_strs_str = param_strs.join(", ");
+    return (param_prefixs_str, param_strs_str);
 }
