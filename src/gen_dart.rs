@@ -78,7 +78,11 @@ void {}_setDylib(DynamicLibrary dylib) {{
             let mut native_fun_decl = format!("late final ptr_{} = _dylib.lookup<NativeFunction<{} Function(", 
             ffiapi_c_method_name, get_native_fun_type_str(&method.return_type));
             if need_add_first_class_param {
-                native_fun_decl.push_str("Int64, ");
+                if is_destructor {
+                    native_fun_decl.push_str("Pointer<Void>, ");
+                } else {
+                    native_fun_decl.push_str("Int64, ");
+                }
             }
             for param in &method.params {
                 native_fun_decl.push_str(&get_native_fun_type_str(&param.field_type));
@@ -95,7 +99,11 @@ void {}_setDylib(DynamicLibrary dylib) {{
                 ffiapi_c_method_name, ffiapi_c_method_name, get_dart_fun_type_str(&method.return_type),
             );
             if need_add_first_class_param {
-                dart_fun_decl.push_str("int, ");
+                if is_destructor {
+                    dart_fun_decl.push_str("Pointer<Void>, ");
+                } else {
+                    dart_fun_decl.push_str("int, ");
+                }
             }
             for param in &method.params {
                 dart_fun_decl.push_str(&get_dart_fun_type_str(&param.field_type));
@@ -148,12 +156,14 @@ import 'package:ffi/ffi.dart';
             // 公共头
             let dart_file_header = local_dart_gen_context.cur_file.as_mut().unwrap();
             let mut class_header = format!("
-class {} {{
+class {} implements Finalizable {{
     late int _nativePtr;
     int getNativePtr() {{
         return _nativePtr;
-    }}", 
-            class.type_str);
+    }}
+    static final _finalizer = NativeFinalizer(ptr_ffi_{}_Destructor);
+", 
+            class.type_str, class.type_str);
             class_header.push_str(&format!("
     {}.FromNative(int nativePtr) : _nativePtr = nativePtr {{}}
             \n", class.type_str));
@@ -255,7 +265,7 @@ class {} {{
             dart_fun_impl.push_str(") {\n");
             // 函数实现
             match method.method_type {
-                MethodType::Normal | MethodType::Destructor => {
+                MethodType::Normal => {
                     if method.method_type == MethodType::Normal && class_is_callback {
                         dart_fun_impl.push_str(&format!("        return {}_block?.call(", method.name));
                     } else {
@@ -268,6 +278,9 @@ class {} {{
                 }
                 MethodType::Constructor => {
                     dart_fun_impl.push_str(&format!("        _nativePtr = {}(", ffiapi_c_method_name));
+                }
+                MethodType::Destructor => {
+                    dart_fun_impl.push_str(&format!("        return {}(Pointer<Void>.fromAddress(", ffiapi_c_method_name));
                 }
                 _ => {
                     unimplemented!("gen_dart_api: unknown method type")
@@ -291,12 +304,18 @@ class {} {{
                 dart_fun_impl.truncate(dart_fun_impl.len() - ", ".len());   // 去掉最后一个参数的, 
             }
             match method.method_type {
-                MethodType::Normal | MethodType::Destructor => {
+                MethodType::Normal => {
                     if method.return_type.type_kind == TypeKind::Class {
                         dart_fun_impl.push_str(")");
                     } else if (method.return_type.type_kind == TypeKind::String) {
                         dart_fun_impl.push_str(").toDartString(");
                     }
+                }
+                MethodType::Destructor => {
+                    dart_fun_impl.push_str(")");
+                }
+                MethodType::Constructor => {
+                    dart_fun_impl.push_str(&format!(");\n        _finalizer.attach(this, Pointer<Void>.fromAddress(_nativePtr)"));
                 }
                 _ => {
                     // do nothing

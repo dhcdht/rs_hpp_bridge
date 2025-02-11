@@ -122,7 +122,11 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&Class>, metho
 
     let mut method_decl = format!("{} ffi_{}_{}(", get_ffi_type_str(&method.return_type), cur_class_name, method.name);
     if need_add_first_class_param {
-        method_decl.push_str(&format!("FFI_{} obj, ", cur_class_name));
+        if is_destructor {
+            method_decl.push_str(&format!("void* obj, "));
+        } else {
+            method_decl.push_str(&format!("FFI_{} obj, ", cur_class_name));
+        }
     }
     for param in &method.params {
         method_decl.push_str(&format!("{} {}, ", get_ffi_type_str(&param.field_type), param.name));
@@ -169,7 +173,9 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&Class>, metho
         MethodType::Destructor => {
             impl_str.push_str(&format!(" {{
     {}* ptr = ({}*)obj;
-    return delete ptr; //", 
+    if (ptr != nullptr) {{
+        return delete ptr;
+    }} //", 
                 cur_class_name, cur_class_name));
         }
         _ => {
