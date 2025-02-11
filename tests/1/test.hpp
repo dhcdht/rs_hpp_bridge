@@ -2,6 +2,7 @@
 #define TEST_HPP
 
 #include <iostream>
+#include <string>
 
 class T1;
 class Callback1 {
@@ -35,7 +36,7 @@ public:
     void floatPtrPtr(float** a) {
         **a = 10.0f;
     }
-    void printString(char* str) {
+    void printCharStr(char* str) {
         std::cout << str << std::endl;
     }
 

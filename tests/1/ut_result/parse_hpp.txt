@@ -243,7 +243,7 @@ GenContext {
                         },
                         Method {
                             method_type: Normal,
-                            name: "printString",
+                            name: "printCharStr",
                             return_type: FieldType {
                                 full_str: "void",
                                 type_str: "void",

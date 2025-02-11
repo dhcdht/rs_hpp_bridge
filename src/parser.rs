@@ -4,8 +4,14 @@ use crate::gen_context::*;
 
 pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str) {
     let clang = clang::Clang::new().unwrap();
-    let index = clang::Index::new(&clang, false, false);
-    let translation_unit = index.parser(hpp_path).parse().unwrap();
+    let index = clang::Index::new(&clang, true, false);
+    let translation_unit = index.parser(hpp_path)
+        .arguments(&[
+            "-x", "c++", 
+            "-isystem", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/",
+            "-isystem", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/",
+        ])
+        .parse().unwrap();
     let entity = translation_unit.get_entity();
 
     let mut file = File::default();
@@ -27,14 +33,19 @@ fn test_parse_hpp() {
 }
 
 fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::Entity, indent: usize) {
+    if entity.is_in_system_header() {
+        return;
+    }
+    
     // 打开这个可以用来调试查看 clang parser 解析到的数据
     // {
     //     for _ in 0..indent {
     //         print!("  ");
     //     }
-    //     println!("{:?}: {}", 
+    //     println!("{:?}: {}, location={:?}", 
     //         entity.get_kind(), 
     //         entity.get_name().unwrap_or_default(),
+    //         entity.get_location(),
     //     );
     // }
 
