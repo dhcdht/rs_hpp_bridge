@@ -70,6 +70,8 @@ pub enum TypeKind {
     Double,
     Char,
 
+    String,
+
     Class,
 }
 
@@ -127,6 +129,15 @@ impl FieldType {
         let mut field_type = FieldType::default();
         field_type.full_str = clang_type.unwrap().get_display_name();
         let lower_full_str = field_type.full_str.to_lowercase();
+
+        // 一些特殊处理的类型
+        // std::string
+        if lower_full_str == "std::string" || lower_full_str == "string" {
+            field_type.type_kind = TypeKind::String;
+            field_type.full_str = "std::string".to_string();
+            field_type.type_str = "std::string".to_string();
+            return field_type;
+        }
 
         // 计算指针级别
         let ptr_level = lower_full_str.chars().rev().take_while(|&c| c == '*').count();

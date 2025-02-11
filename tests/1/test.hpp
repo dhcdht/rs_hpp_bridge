@@ -45,6 +45,11 @@ public:
         cb->onCall(this);
     }
 
+    std::string printString(std::string str) {
+        std::cout << str << std::endl;
+        return "return std::string";
+    }
+
 public:
     int sum;
 

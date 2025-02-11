@@ -18,7 +18,7 @@
 - [x] c++ 生成 c ffi
 - [x] c++类直接生成bridge语言的类（从bridge语言调用到c++）
 - [x] 回调函数（从c++调用到bridge语言）
-- [WIP] std::string
-- [ ] 对象生命周期，上下协调一致共用
+- [x] std::string
+- [WIP] 对象生命周期，上下协调一致共用
 - [ ] shared_ptr
 - [ ] stl

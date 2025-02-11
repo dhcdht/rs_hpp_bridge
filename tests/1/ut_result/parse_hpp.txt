@@ -283,6 +283,27 @@ GenContext {
                                 },
                             ],
                         },
+                        Method {
+                            method_type: Normal,
+                            name: "printString",
+                            return_type: FieldType {
+                                full_str: "std::string",
+                                type_str: "std::string",
+                                type_kind: String,
+                                ptr_level: 0,
+                            },
+                            params: [
+                                MethodParam {
+                                    name: "str",
+                                    field_type: FieldType {
+                                        full_str: "std::string",
+                                        type_str: "std::string",
+                                        type_kind: String,
+                                        ptr_level: 0,
+                                    },
+                                },
+                            ],
+                        },
                         Field {
                             name: "sum",
                         },

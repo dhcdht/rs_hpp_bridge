@@ -140,10 +140,18 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&Class>, metho
         MethodType::Normal => {
             // 普通类函数
             if !cur_class_name.is_empty() {
-                impl_str.push_str(&format!(" {{
+                if method.return_type.type_kind == TypeKind::String {
+                    impl_str.push_str(&format!(" {{
+    {}* ptr = ({}*)obj;
+    static std::string retStr = ptr->{}(", 
+                    cur_class_name, cur_class_name, method.name));
+                } 
+                else {
+                    impl_str.push_str(&format!(" {{
     {}* ptr = ({}*)obj;
     return ({})ptr->{}(", 
                     cur_class_name, cur_class_name, impl_return_type, method.name));
+                }
             } 
             // 独立函数
             else {
@@ -169,12 +177,21 @@ fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&Class>, metho
         }
     }
     for param in &method.params {
-        impl_str.push_str(&format!("({}){}, ", &param.field_type.full_str, param.name));
+        if param.field_type.type_kind == TypeKind::String {
+            impl_str.push_str(&format!("std::string({}), ", param.name));
+        } else {
+            impl_str.push_str(&format!("({}){}, ", &param.field_type.full_str, param.name));
+        }
     }
     if !method.params.is_empty() {
         impl_str.truncate(impl_str.len() - ", ".len()); // 去掉最后一个参数的, 
     }
-    impl_str.push_str(");\n};\n");
+    if method.return_type.type_kind == TypeKind::String {
+        impl_str.push_str(");\n    return (const char*)retStr.c_str();\n};\n");
+    } else {
+        impl_str.push_str(");\n};\n");
+        
+    }
     method_impl.push_str(&impl_str);
 
     c_context.ch_str.push_str(&method_decl);
@@ -367,11 +384,17 @@ fn gen_c_callback_regist_impl(c_context: &mut CFileContext, class: Option<&Class
 
 fn get_ffi_type_str(field_type: &FieldType) -> String {
     match field_type.type_kind {
+        TypeKind::Void | TypeKind::Int64 | TypeKind::Float | TypeKind::Double | TypeKind::Char => {
+            return field_type.full_str.clone();
+        }
+        TypeKind::String => {
+            return "const char*".to_string();
+        }
         TypeKind::Class => {
             return format!("FFI_{}", field_type.type_str);
         }
         _ => {
-            return field_type.full_str.clone();
+            unimplemented!("get_ffi_type_str: unknown type kind");
         }
     }
 }
