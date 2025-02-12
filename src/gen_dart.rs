@@ -82,7 +82,7 @@ class {} implements Finalizable {{
                 let mut init_str = "".to_string();
                 local_dart_gen_context.cur_class = Some(class);
                 for hpp_element in &class.children {
-                    gen_dart_fun_for_callback(gen_context, hpp_element, gen_out_dir, Some(local_dart_gen_context), &mut init_str);
+                    gen_dart_fun_for_regist_callback(gen_context, hpp_element, gen_out_dir, Some(local_dart_gen_context), &mut init_str);
                 }
                 local_dart_gen_context.cur_class = None;
                 // 用于注册dart函数实现的函数
@@ -143,17 +143,18 @@ void {}_setDylib(DynamicLibrary dylib) {{
             local_ffiapi_gen_context.cur_class = Some(class);
             for hpp_element in &class.children {
                 gen_dart_api(gen_context, hpp_element, gen_out_dir, Some(local_ffiapi_gen_context));
-
-                if class.is_callback() {
-                    // 对于回调类，需要特殊生成注册函数
-                    gen_dart_api_for_callback(gen_context, hpp_element, gen_out_dir, Some(local_ffiapi_gen_context));
-                }
             }
             local_ffiapi_gen_context.cur_class = None;
         }
         HppElement::Method(method) => {
             let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
             let ffiapi_file = local_ffiapi_gen_context.cur_file.as_mut().unwrap();
+
+            if local_ffiapi_gen_context.cur_class.is_some() && local_ffiapi_gen_context.cur_class.unwrap().is_callback() {
+                // 对于回调类，需要特殊生成注册函数
+                let dart_api_str = get_str_dart_api_for_regist_callback(local_ffiapi_gen_context.cur_class, method);
+                ffiapi_file.write(format!("{}", dart_api_str).as_bytes());
+            }
 
             let dart_api_str = get_str_dart_api(local_ffiapi_gen_context.cur_class, method);
             ffiapi_file.write(format!("{}\n", dart_api_str).as_bytes());
@@ -168,7 +169,7 @@ void {}_setDylib(DynamicLibrary dylib) {{
 }
 
 /// 为回调类生成特殊的内容, init_str 用于出实话注册的内容
-fn gen_dart_fun_for_callback<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_out_dir: &str, dart_gen_context: Option<&mut DartGenContext<'a>>, init_str: &mut String) {
+fn gen_dart_fun_for_regist_callback<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_out_dir: &str, dart_gen_context: Option<&mut DartGenContext<'a>>, init_str: &mut String) {
     match hpp_element {
         HppElement::Method(method) => {
             let local_dart_gen_context = dart_gen_context.unwrap();
@@ -180,22 +181,6 @@ fn gen_dart_fun_for_callback<'a>(gen_context: &GenContext, hpp_element: &'a HppE
         }
         _ => {
             unimplemented!("gen_dart_api_for_callback_fun: unknown child");
-        }
-    }
-}
-
-/// 对于回调类，需要特殊生成注册函数
-fn gen_dart_api_for_callback<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_out_dir: &str, ffiapi_gen_context: Option<&mut DartGenContext<'a>>) {
-    match hpp_element {
-        HppElement::Method(method) => {
-            let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
-            let ffiapi_file = local_ffiapi_gen_context.cur_file.as_mut().unwrap();
-
-            let dart_api_str = get_str_dart_api_for_callback(local_ffiapi_gen_context.cur_class, method);
-            ffiapi_file.write(format!("{}", dart_api_str).as_bytes());
-        }
-        _ => {
-            unimplemented!("gen_dart_ffiapi_for_callback: unknown child");
         }
     }
 }
@@ -504,7 +489,7 @@ late final {} = ptr_{}.asFunction<{} Function({})>();
     return dar_api_str;
 }
 
-fn get_str_dart_api_for_callback(class: Option<&Class>, method: &Method) -> String {
+fn get_str_dart_api_for_regist_callback(class: Option<&Class>, method: &Method) -> String {
     if method.method_type != MethodType::Normal {
         return "".to_string();
     }
