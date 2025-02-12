@@ -20,5 +20,6 @@
 - [x] 回调函数（从c++调用到bridge语言）
 - [x] std::string
 - [WIP] 对象生命周期，上下协调一致共用
+- [WIP] struct
 - [ ] shared_ptr
 - [ ] stl

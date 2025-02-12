@@ -4,6 +4,10 @@
 #include <iostream>
 #include <string>
 
+struct S1 {
+    std::string sv1;
+};
+
 class T1;
 class Callback1 {
 public:
@@ -58,6 +62,10 @@ public:
     std::string printString(std::string str) {
         std::cout << str << std::endl;
         return "return std::string";
+    }
+    S1 testStruct(S1 s) {
+        std::cout << s.sv1 << std::endl;
+        return s;
     }
 
 public:

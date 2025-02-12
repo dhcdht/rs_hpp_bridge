@@ -101,6 +101,66 @@ impl HppElement {
             },
         }
     }
+
+    /// 确保 class 必须有构造函数
+    pub fn ensure_constructor(&mut self) {
+        match self {
+            HppElement::Class(class) => {
+                for child in &class.children {
+                    if let HppElement::Method(method) = child {
+                        if (method.method_type == MethodType::Constructor) {
+                            return;
+                        }
+                    }
+                }
+
+                let mut method = Method::default();
+                method.method_type = MethodType::Constructor;
+                method.name = "Constructor".to_string();
+                method.return_type = FieldType {
+                    full_str: format!("{} *", class.type_str),
+                    type_str: class.type_str.clone(),
+                    type_kind: TypeKind::Class,
+                    ptr_level: 1,
+                };
+                let element = HppElement::Method(method);
+                class.children.push(element);
+            }
+            _ => {
+                unimplemented!("HppElement::ensure_constructor, {:?}", self);
+            },
+        }
+    }
+
+    /// 确保 class 必须有析构函数
+    pub fn ensure_destructor(&mut self) {
+        match self {
+            HppElement::Class(class) => {
+                for child in &class.children {
+                    if let HppElement::Method(method) = child {
+                        if (method.method_type == MethodType::Destructor) {
+                            return;
+                        }
+                    }
+                }
+
+                let mut method = Method::default();
+                method.method_type = MethodType::Destructor;
+                method.name = "Destructor".to_string();
+                method.return_type = FieldType {
+                    full_str: "void".to_string(),
+                    type_str: "void".to_string(),
+                    type_kind: TypeKind::Void,
+                    ptr_level: 0,
+                };
+                let element = HppElement::Method(method);
+                class.children.push(element);
+            }
+            _ => {
+                unimplemented!("HppElement::ensure_destructor, {:?}", self);
+            },
+        }
+    }
 }
 
 impl fmt::Debug for HppElement {

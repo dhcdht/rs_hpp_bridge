@@ -72,7 +72,7 @@ extern \"C\" {{
                 gen_c_class_method(&mut c_context, None, method);
             }
             _ => {
-                unimplemented!("gen_c_file: unknown child");
+                unimplemented!("gen_c_file: unknown child, {:?}", child);
             }
         }
     }
@@ -338,7 +338,14 @@ fn get_str_method_impl(class: Option<&Class>, method: &Method) -> String {
     static std::string retStr = {}{}({});
     return (const char*)retStr.c_str();
 }};", method_prefix, param_prefix, call_prefix, method.name, param_str);
-            } else {
+            } 
+            else if (method.return_type.type_kind == TypeKind::Class && 0 == method.return_type.ptr_level) {
+                method_impl = format!("{} {{
+    {}
+    return ({})new {}({}{}({}));
+}};", method_prefix, param_prefix, impl_return_type, method.return_type.type_str, call_prefix, method.name, param_str);
+            }
+            else {
                 method_impl = format!("{} {{
     {}
     return ({}){}{}({});
@@ -424,7 +431,11 @@ fn get_str_params_impl(class: Option<&Class>, method: &Method) -> (String, Strin
     for param in &method.params {
         if param.field_type.type_kind == TypeKind::String {
             param_strs.push(format!("std::string({})", param.name));
-        } else {
+        }
+        else if (param.field_type.type_kind == TypeKind::Class && 0 == param.field_type.ptr_level) {
+            param_strs.push(format!("({})(*({}*){})", &param.field_type.full_str, param.field_type.type_str, param.name));
+        } 
+        else {
             param_strs.push(format!("({}){}", &param.field_type.full_str, param.name));
         }
     }

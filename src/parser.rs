@@ -50,7 +50,7 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
     // }
 
     match entity.get_kind() {
-        clang::EntityKind::ClassDecl => handle_clang_ClassDecl(out_hpp_element, entity, indent),
+        clang::EntityKind::ClassDecl | clang::EntityKind::StructDecl => handle_clang_ClassDecl(out_hpp_element, entity, indent),
         clang::EntityKind::Constructor => handle_clang_Constructor(out_hpp_element, entity, indent),
         clang::EntityKind::Destructor => handle_clang_Destructor(out_hpp_element),
         clang::EntityKind::Method => handle_clang_Method(out_hpp_element, entity, indent),
@@ -81,6 +81,10 @@ fn handle_clang_ClassDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
     for child in entity.get_children() {
         visit_parse_clang_entity(&mut element, &child, indent + 1);
     }
+    // 确保 class 必须有构造和析构函数
+    element.ensure_constructor();
+    element.ensure_destructor();
+    
     out_hpp_element.add_child(element);
 }
 

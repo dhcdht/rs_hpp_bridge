@@ -453,6 +453,11 @@ fn get_str_dart_fun_params_impl_for_regist_callback(class: Option<&Class>, metho
 }
 
 fn get_str_dart_fun_type(field_type: &FieldType) -> String {
+    // class类型，需要对应 dart class
+    if field_type.type_kind == TypeKind::Class {
+        return field_type.type_str.clone();
+    }
+
     // 基础数据类型
     if field_type.ptr_level == 0 {
         if field_type.type_kind == TypeKind::String {
@@ -460,10 +465,6 @@ fn get_str_dart_fun_type(field_type: &FieldType) -> String {
         } else {
             return get_str_dart_api_type(field_type);
         }
-    }
-    // class指针，需要对应 dart class
-    if field_type.type_kind == TypeKind::Class {
-        return field_type.type_str.clone();
     }
 
     // 基础类型的指针
@@ -557,8 +558,11 @@ fn get_str_dart_api_type(field_type: &FieldType) -> String {
             TypeKind::String => {
                 return "Pointer<Utf8>".to_string();
             }
+            TypeKind::Class => {
+                return "int".to_string();
+            }
             _ => {
-                unimplemented!("get_dart_fun_type_str: unknown type kind");
+                unimplemented!("get_dart_fun_type_str: unknown type kind, {:?}", field_type);
             }
         }
     }
@@ -640,8 +644,11 @@ fn get_str_native_api_type(field_type: &FieldType) -> String {
             TypeKind::String => {
                 return "Pointer<Utf8>".to_string();
             }
+            TypeKind::Class => {
+                return "Int64".to_string();
+            }
             _ => {
-                unimplemented!("get_native_fun_type_str: unknown type kind");
+                unimplemented!("get_native_fun_type_str: unknown type kind, {:?}", field_type);
             }
         }
     }
