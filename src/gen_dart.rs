@@ -1,11 +1,11 @@
-use std::{fmt::format, fs, io::Write, path::{Path, PathBuf}};
+use std::{fs, io::Write, path::{Path, PathBuf}};
 
-use crate::gen_context::*;
+use crate::{gen_c, gen_context::*};
 
 pub fn gen_dart(gen_context: &GenContext, gen_out_dir: &str) {
     for hpp_element in &gen_context.hpp_elements {
-        gen_dart_ffiapi(gen_context, hpp_element, gen_out_dir, None);
         gen_dart_api(gen_context, hpp_element, gen_out_dir, None);
+        gen_dart_fun(gen_context, hpp_element, gen_out_dir, None);
     }
 }
 
@@ -15,118 +15,7 @@ struct DartGenContext<'a> {
     pub cur_class: Option<&'a Class>,
 }
 
-fn gen_dart_ffiapi<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_out_dir: &str, ffiapi_gen_context: Option<&mut DartGenContext<'a>>) {
-    match hpp_element {
-        HppElement::File(file) => {
-            let mut ffiapi_gen_context = DartGenContext::default();
-
-            let hpp_filename = Path::new(&file.path).file_name().unwrap().to_os_string().into_string().unwrap();
-            let dart_ffiapi_filename = hpp_filename.replace(".hpp", "_ffiapi.dart");
-            let dart_ffiapi_path = PathBuf::new().join(gen_out_dir).join(dart_ffiapi_filename.clone()).into_os_string().into_string().unwrap();
-            let mut ffiapi_file = fs::File::create(dart_ffiapi_path).unwrap();
-
-            // 公共头
-            let mut file_header = format!("
-import 'dart:ffi';
-import 'dart:io';
-import 'package:ffi/ffi.dart';
-            \n");
-            file_header.push_str(&format!("
-late final DynamicLibrary _dylib;
-void {}_setDylib(DynamicLibrary dylib) {{
-  _dylib = dylib;
-  return;
-}}
-            \n", hpp_filename.replace(".hpp", "")));
-            ffiapi_file.write(file_header.as_bytes());
-
-            ffiapi_gen_context.cur_file = Some(ffiapi_file);
-            for hpp_element in &file.children {
-                gen_dart_ffiapi(gen_context, hpp_element, gen_out_dir, Some(&mut ffiapi_gen_context));
-            }
-        }
-        HppElement::Class(class) => {
-            let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
-            
-            local_ffiapi_gen_context.cur_class = Some(class);
-            for hpp_element in &class.children {
-                gen_dart_ffiapi(gen_context, hpp_element, gen_out_dir, Some(local_ffiapi_gen_context));
-
-                if class.is_callback() {
-                    // 对于回调类，需要特殊生成注册函数
-                    gen_dart_ffiapi_for_callback(gen_context, hpp_element, gen_out_dir, Some(local_ffiapi_gen_context));
-                }
-            }
-            local_ffiapi_gen_context.cur_class = None;
-        }
-        HppElement::Method(method) => {
-            let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
-            let ffiapi_file = local_ffiapi_gen_context.cur_file.as_mut().unwrap();
-
-            // 独立函数和类的函数，都走下边逻辑，需要注意区分
-            let mut cur_class_name = "";
-            if let Some(cur_class) = local_ffiapi_gen_context.cur_class {
-                cur_class_name = &cur_class.type_str;
-            }
-            let is_normal_method = method.method_type == MethodType::Normal;
-            let is_destructor = method.method_type == MethodType::Destructor;
-            // 是否需要加第一个类的实例参数，模拟调用类实例的方法
-            let need_add_first_class_param= (is_normal_method && !cur_class_name.is_empty()) || is_destructor;
-            let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
-
-            // native函数指针
-            let mut native_fun_decl = format!("late final ptr_{} = _dylib.lookup<NativeFunction<{} Function(", 
-            ffiapi_c_method_name, get_native_fun_type_str(&method.return_type));
-            if need_add_first_class_param {
-                if is_destructor {
-                    native_fun_decl.push_str("Pointer<Void>, ");
-                } else {
-                    native_fun_decl.push_str("Int64, ");
-                }
-            }
-            for param in &method.params {
-                native_fun_decl.push_str(&get_native_fun_type_str(&param.field_type));
-                native_fun_decl.push_str(", ");
-            }
-            if need_add_first_class_param || !method.params.is_empty() {
-                native_fun_decl.truncate(native_fun_decl.len() - ", ".len());   // 去掉最后一个参数的, 
-                
-            }
-            native_fun_decl.push_str(&format!(")>>('{}');\n", ffiapi_c_method_name));
-            ffiapi_file.write(native_fun_decl.as_bytes());
-            // dart函数
-            let mut dart_fun_decl = format!("late final {} = ptr_{}.asFunction<{} Function(",
-                ffiapi_c_method_name, ffiapi_c_method_name, get_dart_fun_type_str(&method.return_type),
-            );
-            if need_add_first_class_param {
-                if is_destructor {
-                    dart_fun_decl.push_str("Pointer<Void>, ");
-                } else {
-                    dart_fun_decl.push_str("int, ");
-                }
-            }
-            for param in &method.params {
-                dart_fun_decl.push_str(&get_dart_fun_type_str(&param.field_type));
-                dart_fun_decl.push_str(", ");
-            }
-            if need_add_first_class_param || !method.params.is_empty() {
-                dart_fun_decl.truncate(dart_fun_decl.len() - ", ".len());   // 去掉最后一个参数的, 
-            }
-            dart_fun_decl.push_str(")>();\n");
-            ffiapi_file.write(dart_fun_decl.as_bytes());
-
-            ffiapi_file.write("\n".as_bytes());
-        }
-        HppElement::Field(field) => {
-            // TODO
-        }
-        _ => {
-            unimplemented!("gen_dart_ffiapi: unknown child");
-        }
-    }
-}
-
-fn gen_dart_api<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_out_dir: &str, dart_gen_context: Option<&mut DartGenContext<'a>>) {
+fn gen_dart_fun<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_out_dir: &str, dart_gen_context: Option<&mut DartGenContext<'a>>) {
     match hpp_element {
         HppElement::File(file) => {
             let mut dart_gen_context = DartGenContext::default();
@@ -147,7 +36,7 @@ import 'package:ffi/ffi.dart';
 
             dart_gen_context.cur_file = Some(dart_file);
             for hpp_element in &file.children {
-                gen_dart_api(gen_context, hpp_element, gen_out_dir, Some(&mut dart_gen_context));
+                gen_dart_fun(gen_context, hpp_element, gen_out_dir, Some(&mut dart_gen_context));
             }
         }
         HppElement::Class(class) => {
@@ -177,7 +66,7 @@ class {} implements Finalizable {{
             
             local_dart_gen_context.cur_class = Some(class);
             for hpp_element in &class.children {
-                gen_dart_api(gen_context, hpp_element, gen_out_dir, Some(local_dart_gen_context));
+                gen_dart_fun(gen_context, hpp_element, gen_out_dir, Some(local_dart_gen_context));
             }
             local_dart_gen_context.cur_class = None;
 
@@ -193,7 +82,7 @@ class {} implements Finalizable {{
                 let mut init_str = "".to_string();
                 local_dart_gen_context.cur_class = Some(class);
                 for hpp_element in &class.children {
-                    gen_dart_api_for_callback_fun(gen_context, hpp_element, gen_out_dir, Some(local_dart_gen_context), &mut init_str);
+                    gen_dart_fun_for_callback(gen_context, hpp_element, gen_out_dir, Some(local_dart_gen_context), &mut init_str);
                 }
                 local_dart_gen_context.cur_class = None;
                 // 用于注册dart函数实现的函数
@@ -206,150 +95,8 @@ class {} implements Finalizable {{
             let local_dart_gen_context = dart_gen_context.unwrap();
             let dart_file = local_dart_gen_context.cur_file.as_mut().unwrap();
 
-            // 独立函数和类的函数，都走下边逻辑，需要注意区分
-            let mut class_is_callback = false;
-            let mut cur_class_name = "";
-            if let Some(cur_class) = local_dart_gen_context.cur_class {
-                cur_class_name = &cur_class.type_str;
-                if cur_class.is_callback() {
-                    class_is_callback = true;
-                }
-            }
-            let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
-            let is_normal_method = method.method_type == MethodType::Normal;
-            let is_destructor = method.method_type == MethodType::Destructor;
-            // 是否需要加第一个类的实例参数，模拟调用类实例的方法
-            let need_add_first_class_param= (!class_is_callback && is_normal_method && !cur_class_name.is_empty()) || is_destructor;
-
-            // 为回调类，生成dart闭包，用来让业务方自定义实现
-            match method.method_type {
-                MethodType::Normal => {
-                    if class_is_callback {
-                        let mut dart_block_impl = format!("    {} Function(", get_dart_api_type_str(&method.return_type));
-                        for param in &method.params {
-                            dart_block_impl.push_str(&format!("{} {}, ", get_dart_api_type_str(&param.field_type), param.name));
-                        }
-                        if !method.params.is_empty() {
-                            dart_block_impl.truncate(dart_block_impl.len() - ", ".len());   // 去掉最后一个参数的, 
-                        }
-                        dart_block_impl.push_str(&format!(")? {}_block = null;\n", method.name));
-                        dart_file.write(dart_block_impl.as_bytes());
-                    }
-                }
-                _ => {
-                    // do nothing
-                }
-            }
-            
-            // 函数定义
-            let mut dart_fun_impl = "".to_string();
-            match method.method_type {
-                MethodType::Normal | MethodType::Destructor => {
-                    dart_fun_impl.push_str(&format!("    {} {}(", 
-                        get_dart_api_type_str(&method.return_type), method.name));
-                }
-                MethodType::Constructor => {
-                    dart_fun_impl.push_str(&format!("    {}.{}(", 
-                        cur_class_name, method.name));
-                }
-                _ => {
-                    unimplemented!("gen_dart_api: unknown method type")
-                }
-            }
-            for param in &method.params {
-                dart_fun_impl.push_str(&format!("{} {}, ", get_dart_api_type_str(&param.field_type), param.name));
-            }
-            if !method.params.is_empty() {
-                dart_fun_impl.truncate(dart_fun_impl.len() - ", ".len());   // 去掉最后一个参数的, 
-            }
-            dart_fun_impl.push_str(") {\n");
-            // 函数实现
-            match method.method_type {
-                MethodType::Normal => {
-                    if method.method_type == MethodType::Normal && class_is_callback {
-                        dart_fun_impl.push_str(&format!("        return {}_block?.call(", method.name));
-                    } else {
-                        if (method.return_type.type_kind == TypeKind::Class) {
-                            dart_fun_impl.push_str(&format!("        return {}.FromNative({}(", get_dart_api_type_str(&method.return_type), ffiapi_c_method_name));
-                        } else {
-                            dart_fun_impl.push_str(&format!("        return {}(", ffiapi_c_method_name));
-                        }
-                    }
-                }
-                MethodType::Constructor => {
-                    dart_fun_impl.push_str(&format!("        _nativePtr = {}(", ffiapi_c_method_name));
-                }
-                MethodType::Destructor => {
-                    dart_fun_impl.push_str(&format!("        return {}(Pointer<Void>.fromAddress(", ffiapi_c_method_name));
-                }
-                _ => {
-                    unimplemented!("gen_dart_api: unknown method type")
-                }
-            }
-            if need_add_first_class_param {
-                dart_fun_impl.push_str("_nativePtr, ");
-            }
-            for param in &method.params {
-                if !class_is_callback && param.field_type.type_kind == TypeKind::Class {
-                    dart_fun_impl.push_str(&format!("{}.getNativePtr(), ", param.name));
-                }
-                else if param.field_type.type_kind == TypeKind::String {
-                    dart_fun_impl.push_str(&format!("{}.toNativeUtf8(), ", param.name))
-                }
-                else {
-                    dart_fun_impl.push_str(&format!("{}, ", param.name));
-                }
-            }
-            if need_add_first_class_param || !method.params.is_empty() {
-                dart_fun_impl.truncate(dart_fun_impl.len() - ", ".len());   // 去掉最后一个参数的, 
-            }
-            match method.method_type {
-                MethodType::Normal => {
-                    if method.return_type.type_kind == TypeKind::Class {
-                        dart_fun_impl.push_str(")");
-                    } else if (method.return_type.type_kind == TypeKind::String) {
-                        dart_fun_impl.push_str(").toDartString(");
-                    }
-                }
-                MethodType::Destructor => {
-                    dart_fun_impl.push_str(")");
-                }
-                MethodType::Constructor => {
-                    dart_fun_impl.push_str(&format!(");\n        _finalizer.attach(this, Pointer<Void>.fromAddress(_nativePtr)"));
-                }
-                _ => {
-                    // do nothing
-                }
-            }
-            
-            // 为回调类生成特殊内容
-            if class_is_callback {
-                match method.method_type {
-                    MethodType::Constructor => {
-                        dart_fun_impl.push_str(&format!(");
-        nativeToObjMap[_nativePtr] = WeakReference<{}>(this);
-        _{}_init();
-", cur_class_name, cur_class_name));
-                    }
-                    MethodType::Normal => {
-                        let exception_default_value_str = get_dart_fun_exception_default_value_str(&method.return_type);
-                        let exception_value_str = if exception_default_value_str.is_empty() {
-                            ");\n".to_string()
-                        } else {
-                            format!(") ?? {};\n", exception_default_value_str)
-                        };
-                        dart_fun_impl.push_str(&exception_value_str);
-                    }
-                    _ => {
-                        dart_fun_impl.push_str(");\n");
-                    }
-                }
-            } else {
-                dart_fun_impl.push_str(");\n");
-            }
-
-            dart_fun_impl.push_str("    }\n");
-            dart_file.write(dart_fun_impl.as_bytes());
+            let method_impl = get_str_dart_fun(local_dart_gen_context.cur_class, method);
+            dart_file.write(method_impl.as_bytes());
         }
         HppElement::Field(field) => {
             // TODO
@@ -360,13 +107,373 @@ class {} implements Finalizable {{
     }
 }
 
-fn get_dart_api_type_str(field_type: &FieldType) -> String {
+fn gen_dart_api<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_out_dir: &str, ffiapi_gen_context: Option<&mut DartGenContext<'a>>) {
+    match hpp_element {
+        HppElement::File(file) => {
+            let mut ffiapi_gen_context = DartGenContext::default();
+
+            let hpp_filename = Path::new(&file.path).file_name().unwrap().to_os_string().into_string().unwrap();
+            let dart_ffiapi_filename = hpp_filename.replace(".hpp", "_ffiapi.dart");
+            let dart_ffiapi_path = PathBuf::new().join(gen_out_dir).join(dart_ffiapi_filename.clone()).into_os_string().into_string().unwrap();
+            let mut ffiapi_file = fs::File::create(dart_ffiapi_path).unwrap();
+
+            // 公共头
+            let mut file_header = format!("
+import 'dart:ffi';
+import 'dart:io';
+import 'package:ffi/ffi.dart';
+            \n");
+            file_header.push_str(&format!("
+late final DynamicLibrary _dylib;
+void {}_setDylib(DynamicLibrary dylib) {{
+  _dylib = dylib;
+  return;
+}}
+            \n", hpp_filename.replace(".hpp", "")));
+            ffiapi_file.write(file_header.as_bytes());
+
+            ffiapi_gen_context.cur_file = Some(ffiapi_file);
+            for hpp_element in &file.children {
+                gen_dart_api(gen_context, hpp_element, gen_out_dir, Some(&mut ffiapi_gen_context));
+            }
+        }
+        HppElement::Class(class) => {
+            let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
+            
+            local_ffiapi_gen_context.cur_class = Some(class);
+            for hpp_element in &class.children {
+                gen_dart_api(gen_context, hpp_element, gen_out_dir, Some(local_ffiapi_gen_context));
+
+                if class.is_callback() {
+                    // 对于回调类，需要特殊生成注册函数
+                    gen_dart_api_for_callback(gen_context, hpp_element, gen_out_dir, Some(local_ffiapi_gen_context));
+                }
+            }
+            local_ffiapi_gen_context.cur_class = None;
+        }
+        HppElement::Method(method) => {
+            let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
+            let ffiapi_file = local_ffiapi_gen_context.cur_file.as_mut().unwrap();
+
+            let dart_api_str = get_str_dart_api(local_ffiapi_gen_context.cur_class, method);
+            ffiapi_file.write(format!("{}\n", dart_api_str).as_bytes());
+        }
+        HppElement::Field(field) => {
+            // TODO
+        }
+        _ => {
+            unimplemented!("gen_dart_ffiapi: unknown child");
+        }
+    }
+}
+
+/// 为回调类生成特殊的内容, init_str 用于出实话注册的内容
+fn gen_dart_fun_for_callback<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_out_dir: &str, dart_gen_context: Option<&mut DartGenContext<'a>>, init_str: &mut String) {
+    match hpp_element {
+        HppElement::Method(method) => {
+            let local_dart_gen_context = dart_gen_context.unwrap();
+            let dart_file = local_dart_gen_context.cur_file.as_mut().unwrap();
+
+            let (local_init_str, dart_fun_impl) = get_dart_fun_for_regist_callback(local_dart_gen_context.cur_class, method);
+            init_str.push_str(&local_init_str);
+            dart_file.write(dart_fun_impl.as_bytes());
+        }
+        _ => {
+            unimplemented!("gen_dart_api_for_callback_fun: unknown child");
+        }
+    }
+}
+
+/// 对于回调类，需要特殊生成注册函数
+fn gen_dart_api_for_callback<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_out_dir: &str, ffiapi_gen_context: Option<&mut DartGenContext<'a>>) {
+    match hpp_element {
+        HppElement::Method(method) => {
+            let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
+            let ffiapi_file = local_ffiapi_gen_context.cur_file.as_mut().unwrap();
+
+            let dart_api_str = get_str_dart_api_for_callback(local_ffiapi_gen_context.cur_class, method);
+            ffiapi_file.write(format!("{}", dart_api_str).as_bytes());
+        }
+        _ => {
+            unimplemented!("gen_dart_ffiapi_for_callback: unknown child");
+        }
+    }
+}
+
+fn get_str_dart_fun(class: Option<&Class>, method: &Method) -> String {
+    // 独立函数和类的函数，都走下边逻辑，需要注意区分
+    let (cur_class_name, class_is_callback) = if let Some(cur_class) = class {
+        (cur_class.type_str.as_str(), cur_class.is_callback())
+    } else {
+        ("", false)
+    };
+
+    let callbck_block = get_str_dart_fun_callback_block(class, method);
+    let params_decl_str = get_str_dart_fun_params_decl(class, method);
+    let fun_body = if class_is_callback {
+        get_str_dart_fun_body_for_callback(class, method)
+    } else {
+        get_str_dart_fun_body(class, method)
+    };
+
+    let mut fun_name = "".to_string();
+    match method.method_type {
+        MethodType::Normal | MethodType::Destructor => {
+            fun_name.push_str(&format!("{} {}", get_str_dart_fun_type(&method.return_type), method.name));
+        }
+        MethodType::Constructor => {
+            fun_name.push_str(&format!("{}.{}", cur_class_name, method.name));
+        }
+        _ => {
+            unimplemented!("gen_dart_api: unknown method type")
+        }
+    }
+
+    let dart_fun_impl = format!("    {}
+    {}({}) {{
+        {}
+    }}
+",
+        callbck_block,
+        fun_name, params_decl_str,
+        fun_body,
+    );
+
+    return dart_fun_impl;
+}
+
+fn get_str_dart_fun_body(class: Option<&Class>, method: &Method) -> String {
+    // 独立函数和类的函数，都走下边逻辑，需要注意区分
+    let (cur_class_name, class_is_callback) = if let Some(cur_class) = class {
+        (cur_class.type_str.as_str(), cur_class.is_callback())
+    } else {
+        ("", false)
+    };
+    let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
+    let params_str = get_str_dart_fun_params_impl(class, method);
+
+    let mut body_prefix = "".to_string();
+    let mut body_suffix = "".to_string();
+    match method.method_type {
+        MethodType::Normal => {
+            if (method.return_type.type_kind == TypeKind::Class) {
+                body_prefix.push_str(&format!("return {}.FromNative({}(", get_str_dart_fun_type(&method.return_type), ffiapi_c_method_name));
+                body_suffix.push_str("));");
+            } else {
+                body_prefix.push_str(&format!("return {}(", ffiapi_c_method_name));
+                if (method.return_type.type_kind == TypeKind::String) {
+                    body_suffix.push_str(").toDartString();");
+                } else {
+                    body_suffix.push_str(");");
+                }
+            }
+        }
+        MethodType::Constructor => {
+            body_prefix.push_str(&format!("_nativePtr = {}(", ffiapi_c_method_name));
+            body_suffix.push_str(");
+        _finalizer.attach(this, Pointer<Void>.fromAddress(_nativePtr));");
+        }
+        MethodType::Destructor => {
+            body_prefix.push_str(&format!("return {}(Pointer<Void>.fromAddress(", ffiapi_c_method_name));
+            body_suffix.push_str("));");
+        }
+        _ => {
+            unimplemented!("gen_dart_api: unknown method type")
+        }
+    }
+
+    let fun_body = format!("{}{}{}", 
+        body_prefix, params_str, body_suffix);
+
+    return fun_body;
+}
+
+fn get_str_dart_fun_callback_block(class: Option<&Class>, method: &Method) -> String {
+    if method.method_type != MethodType::Normal {
+        return "".to_string();
+    }
+    // 独立函数和类的函数，都走下边逻辑，需要注意区分
+    let (cur_class_name, class_is_callback) = if let Some(cur_class) = class {
+        (cur_class.type_str.as_str(), cur_class.is_callback())
+    } else {
+        ("", false)
+    };
+    if cur_class_name.is_empty() || !class_is_callback {
+        return "".to_string();
+    }
+
+    let params_str = get_str_dart_fun_params_decl(class, method);
+    let block_str = format!("{} Function({})? {}_block = null;",
+        get_str_dart_fun_type(&method.return_type), params_str, method.name
+    );
+
+    return block_str;
+}
+
+fn get_str_dart_fun_body_for_callback(class: Option<&Class>, method: &Method) -> String {
+    // 独立函数和类的函数，都走下边逻辑，需要注意区分
+    let (cur_class_name, class_is_callback) = if let Some(cur_class) = class {
+        (cur_class.type_str.as_str(), cur_class.is_callback())
+    } else {
+        ("", false)
+    };
+    let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
+    let params_str = get_str_dart_fun_params_impl(class, method);
+
+    let exception_default_value_str = get_str_dart_api_exception_default_value(&method.return_type);
+    let exception_value_str = if exception_default_value_str.is_empty() {
+        "".to_string()
+    } else {
+        format!(" ?? {}", exception_default_value_str)
+    };
+    let mut body_prefix = "".to_string();
+    let mut body_suffix = "".to_string();
+    match method.method_type {
+        MethodType::Normal => {
+            body_prefix.push_str(&format!("return {}_block?.call(", method.name));
+            body_suffix.push_str(&format!("){};", exception_value_str));
+        }
+        MethodType::Constructor => {
+            body_prefix.push_str(&format!("_nativePtr = {}(", ffiapi_c_method_name));
+            body_suffix.push_str(&format!(");
+        _finalizer.attach(this, Pointer<Void>.fromAddress(_nativePtr));
+        nativeToObjMap[_nativePtr] = WeakReference<Callback1>(this);
+        _{}_init();", cur_class_name));
+        }
+        MethodType::Destructor => {
+            body_prefix.push_str(&format!("return {}(Pointer<Void>.fromAddress(", ffiapi_c_method_name));
+            body_suffix.push_str("));");
+        }
+        _ => {
+            unimplemented!("gen_dart_api: unknown method type")
+        }
+    }
+
+    let fun_body = format!("{}{}{}", 
+        body_prefix, params_str, body_suffix);
+
+    return fun_body;
+}
+
+fn get_str_dart_fun_params_decl(class: Option<&Class>, method: &Method) -> String {
+    let mut param_strs = Vec::new();
+    for param in &method.params {
+        param_strs.push(format!("{} {}", get_str_dart_fun_type(&param.field_type), param.name));
+    }
+
+    return param_strs.join(", ");
+}
+
+fn get_str_dart_fun_params_impl(class: Option<&Class>, method: &Method) -> String {
+    // 独立函数和类的函数，都走下边逻辑，需要注意区分
+    let class_is_callback = if let Some(cur_class) = class {
+        cur_class.is_callback()
+    } else {
+        false
+    };
+    let is_destructor = method.method_type == MethodType::Destructor;
+
+    let mut param_strs = Vec::new();
+    if (gen_c::get_is_need_first_class_param(class, method) && !class_is_callback) || is_destructor {
+        param_strs.push("_nativePtr".to_string());
+    }
+    for param in &method.params {
+        if !class_is_callback && param.field_type.type_kind == TypeKind::Class {
+            param_strs.push(format!("{}.getNativePtr()", param.name));
+        }
+        else if param.field_type.type_kind == TypeKind::String {
+            param_strs.push(format!("{}.toNativeUtf8()", param.name))
+        }
+        else {
+            param_strs.push(format!("{}", param.name));
+        }
+    }
+
+    return param_strs.join(", ");
+}
+
+/// (初始化内容，回调函数的实现内容)
+fn get_dart_fun_for_regist_callback(class: Option<&Class>, method: &Method) -> (String, String) {
+    if (method.method_type != MethodType::Normal) {
+        return ("".to_string(), "".to_string());
+    }
+
+    // 独立函数和类的函数，都走下边逻辑，需要注意区分
+    let cur_class_name = if let Some(cur_class) = class {
+        &cur_class.type_str
+    } else {
+        ""
+    };
+    /// native函数指针类型的名字
+    let native_fun_type_name = format!("FFI_{}_{}", cur_class_name, method.name);
+    /// 注册函数的名字
+    let native_regist_fun_name = format!("{}_regist", native_fun_type_name);
+    /// 实现函数的名字
+    let dart_callback_fun_name = format!("_{}_{}", cur_class_name, method.name);
+    let params_decl_str = get_str_dart_fun_params_decl_for_regist_callback(class, method);
+    let params_impl_str = get_str_dart_fun_params_impl_for_regist_callback(class, method);
+
+    // 生成用于初始化的内容
+    let exception_default_value_str = get_str_dart_api_exception_default_value(&method.return_type);
+    let exception_value_str = if exception_default_value_str.is_empty() {
+        "".to_string()
+    } else {
+        format!(", {}", exception_default_value_str)
+    };
+    let init_str = format!("    
+    {{
+    final Pointer<NativeFunction<{}>> pt = Pointer.fromFunction<{}>({}{});
+    {}(pt);
+    }}
+", 
+        native_fun_type_name, native_fun_type_name, dart_callback_fun_name, exception_value_str, 
+        native_regist_fun_name,
+    );
+
+    // 生成dart回调函数内容
+    let dart_fun_impl = format!("{} {}({}) {{
+    return {}.nativeToObjMap[native]!.target!.{}({});
+}}
+",
+        get_str_dart_api_type(&method.return_type), dart_callback_fun_name, params_decl_str,
+        cur_class_name, method.name, params_impl_str,
+    );
+
+    return (init_str, dart_fun_impl);
+}
+
+fn get_str_dart_fun_params_decl_for_regist_callback(class: Option<&Class>, method: &Method) -> String {
+    let mut param_strs = Vec::new();
+    if gen_c::get_is_need_first_class_param(class, method) {
+        param_strs.push("int native".to_string());
+    }
+    for param in &method.params {
+        param_strs.push(format!("{} {}", get_str_dart_api_type(&param.field_type), param.name));
+    }
+
+    return param_strs.join(", ");
+}
+
+fn get_str_dart_fun_params_impl_for_regist_callback(class: Option<&Class>, method: &Method) -> String {
+    let mut param_strs = Vec::new();
+    for param in &method.params {
+        if param.field_type.type_kind == TypeKind::Class {
+            param_strs.push(format!("{}.FromNative({})", param.field_type.type_str, param.name));
+        } else {
+            param_strs.push(format!("{}", param.name));
+        }
+    }
+
+    return param_strs.join(", ");
+}
+
+fn get_str_dart_fun_type(field_type: &FieldType) -> String {
     // 基础数据类型
     if field_type.ptr_level == 0 {
         if field_type.type_kind == TypeKind::String {
             return "String".to_string();
         } else {
-            return get_dart_fun_type_str(field_type);
+            return get_str_dart_api_type(field_type);
         }
     }
     // class指针，需要对应 dart class
@@ -375,10 +482,75 @@ fn get_dart_api_type_str(field_type: &FieldType) -> String {
     }
 
     // 基础类型的指针
-    return get_native_fun_type_str(field_type);
+    return get_str_native_api_type(field_type);
 }
 
-fn get_dart_fun_type_str(field_type: &FieldType) -> String {
+fn get_str_dart_api(class: Option<&Class>, method: &Method) -> String {
+    // 独立函数和类的函数，都走下边逻辑，需要注意区分
+    let mut cur_class_name = "";
+    if let Some(cur_class) = class {
+        cur_class_name = &cur_class.type_str;
+    }
+    let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
+    let native_api_params_str = get_str_native_api_params_decl(class, method);
+    let dart_api_params_str = get_str_dart_api_params_decl(class, method);
+
+    let dar_api_str = format!("late final ptr_{} = _dylib.lookup<NativeFunction<{} Function({})>>('{}');
+late final {} = ptr_{}.asFunction<{} Function({})>();
+",
+        ffiapi_c_method_name, get_str_native_api_type(&method.return_type), native_api_params_str, ffiapi_c_method_name,
+        ffiapi_c_method_name, ffiapi_c_method_name, get_str_dart_api_type(&method.return_type), dart_api_params_str,
+    );
+    return dar_api_str;
+}
+
+fn get_str_dart_api_for_callback(class: Option<&Class>, method: &Method) -> String {
+    if method.method_type != MethodType::Normal {
+        return "".to_string();
+    }
+
+    // 独立函数和类的函数，都走下边逻辑，需要注意区分
+    let mut cur_class_name = "";
+    if let Some(cur_class) = class {
+        cur_class_name = &cur_class.type_str;
+    }
+    /// native函数指针类型的名字
+    let native_fun_type_name = format!("FFI_{}_{}", cur_class_name, method.name);
+    /// 注册函数的名字
+    let native_regist_fun_name = format!("{}_regist", native_fun_type_name);
+    /// 参数列表
+    let params_str = get_str_native_api_params_decl(class, method);
+
+    let dart_api_str = format!("typedef {} = {} Function({});
+late final ptr_{} = _dylib.lookup<NativeFunction<Void Function(Pointer<NativeFunction<{}>>)>>('{}');
+late final {} = ptr_{}.asFunction<void Function(Pointer<NativeFunction<{}>>)>();
+", 
+        native_fun_type_name, get_str_native_api_type(&method.return_type), params_str,
+        native_regist_fun_name, native_fun_type_name, native_regist_fun_name,
+        native_regist_fun_name, native_regist_fun_name, native_fun_type_name,
+    );
+
+    return dart_api_str;
+}
+
+/// 返回dart api中的参数列表
+fn get_str_dart_api_params_decl(class: Option<&Class>, method: &Method) -> String {
+    let mut param_strs = Vec::new();
+    if gen_c::get_is_need_first_class_param(class, method) {
+        if method.method_type == MethodType::Destructor {
+            param_strs.push("Pointer<Void>".to_string());
+        } else {
+            param_strs.push("int".to_string());
+        }
+    }
+    for param in &method.params {
+        param_strs.push(format!("{}", get_str_dart_api_type(&param.field_type)));
+    }
+
+    return param_strs.join(", ");
+}
+
+fn get_str_dart_api_type(field_type: &FieldType) -> String {
     // 基础数据类型
     if field_type.ptr_level == 0 {
         match field_type.type_kind {
@@ -411,10 +583,57 @@ fn get_dart_fun_type_str(field_type: &FieldType) -> String {
     }
 
     // 基础类型的指针
-    return get_native_fun_type_str(field_type);
+    return get_str_native_api_type(field_type);
 }
 
-fn get_native_fun_type_str(field_type: &FieldType) -> String {
+/// Pointer.fromFunction 对于有返回值的函数，必须有个默认值，否则无法编译
+fn get_str_dart_api_exception_default_value(field_type: &FieldType) -> String {
+    // 基础数据类型
+    if field_type.ptr_level == 0 {
+        match field_type.type_kind {
+            TypeKind::Void => {
+                return "".to_string();
+            }
+            TypeKind::Int64 => {
+                return "0".to_string();
+            }
+            TypeKind::Float => {
+                return "0.0".to_string();
+            }
+            TypeKind::Double => {
+                return "0.0".to_string();
+            }
+            TypeKind::Char => {
+                return "0".to_string();
+            }
+            _ => {
+                unimplemented!("get_dart_fun_type_str: unknown type kind");
+            }
+        }
+    }
+    // class指针
+    // 基础类型的指针
+    return "0".to_string();
+}
+
+/// 返回native api中的参数列表
+fn get_str_native_api_params_decl(class: Option<&Class>, method: &Method) -> String {
+    let mut param_strs = Vec::new();
+    if gen_c::get_is_need_first_class_param(class, method) {
+        if method.method_type == MethodType::Destructor {
+            param_strs.push("Pointer<Void>".to_string());
+        } else {
+            param_strs.push("Int64".to_string());
+        }
+    }
+    for param in &method.params {
+        param_strs.push(format!("{}", get_str_native_api_type(&param.field_type)));
+    }
+
+    return param_strs.join(", ");
+}
+
+fn get_str_native_api_type(field_type: &FieldType) -> String {
     // 基础数据类型
     if field_type.ptr_level == 0 {
         match field_type.type_kind {
@@ -460,164 +679,4 @@ fn get_native_fun_type_str(field_type: &FieldType) -> String {
         native_type = format!("Pointer<{}>", native_type);
     }
     return native_type
-}
-
-/// 对于回调类，需要特殊生成注册函数
-fn gen_dart_ffiapi_for_callback<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_out_dir: &str, ffiapi_gen_context: Option<&mut DartGenContext<'a>>) {
-    match hpp_element {
-        HppElement::Method(method) => {
-            let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
-            let ffiapi_file = local_ffiapi_gen_context.cur_file.as_mut().unwrap();
-
-            // 独立函数和类的函数，都走下边逻辑，需要注意区分
-            let mut cur_class_name = "";
-            if let Some(cur_class) = local_ffiapi_gen_context.cur_class {
-                cur_class_name = &cur_class.type_str;
-            }
-            let is_normal_method = method.method_type == MethodType::Normal;
-            let is_destructor = method.method_type == MethodType::Destructor;
-            // 是否需要加第一个类的实例参数，模拟调用类实例的方法
-            let need_add_first_class_param= (is_normal_method && !cur_class_name.is_empty()) || is_destructor;
-            /// native函数指针类型的名字
-            let native_fun_type_name = format!("FFI_{}_{}", cur_class_name, method.name);
-            /// 注册函数的名字
-            let native_regist_fun_name = format!("{}_regist", native_fun_type_name);
-
-            // 对于回调类，需要特殊生成注册
-            if is_normal_method {
-                // 生成native函数指针类型的定义
-                let mut native_fun_typedef = format!("typedef {} = {} Function(", native_fun_type_name, get_native_fun_type_str(&method.return_type));
-                if need_add_first_class_param {
-                    native_fun_typedef.push_str("Int64, ");
-                }
-                for param in &method.params {
-                    native_fun_typedef.push_str(&get_native_fun_type_str(&param.field_type));
-                    native_fun_typedef.push_str(", ");
-                }
-                if need_add_first_class_param || !method.params.is_empty() {
-                    native_fun_typedef.truncate(native_fun_typedef.len() - ", ".len());   // 去掉最后一个参数的, 
-                }
-                native_fun_typedef.push_str(&format!(");\n"));
-                ffiapi_file.write(native_fun_typedef.as_bytes());
-                // 生成native函数指针
-                let mut native_fun_decl = format!("late final ptr_{} = _dylib.lookup<NativeFunction<Void Function(Pointer<NativeFunction<{}>>)>>('{}');\n", 
-                native_regist_fun_name, native_fun_type_name, native_regist_fun_name);
-                ffiapi_file.write(native_fun_decl.as_bytes());
-                // 生成dart函数
-                let mut dart_fun_decl = format!("late final {} = ptr_{}.asFunction<void Function(Pointer<NativeFunction<{}>>)>();\n",
-                    native_regist_fun_name, native_regist_fun_name, native_fun_type_name,
-                );
-                ffiapi_file.write(dart_fun_decl.as_bytes());
-
-                ffiapi_file.write("\n".as_bytes());
-            }
-        }
-        _ => {
-            unimplemented!("gen_dart_ffiapi_for_callback: unknown child");
-        }
-    }
-}
-
-/// 为回调类生成特殊的内容, init_str 用于出实话注册的内容
-fn gen_dart_api_for_callback_fun<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_out_dir: &str, dart_gen_context: Option<&mut DartGenContext<'a>>, init_str: &mut String) {
-    match hpp_element {
-        HppElement::Method(method) => {
-            if (method.method_type != MethodType::Normal) {
-                return;
-            }
-
-            let local_dart_gen_context = dart_gen_context.unwrap();
-            let dart_file = local_dart_gen_context.cur_file.as_mut().unwrap();
-
-            // 独立函数和类的函数，都走下边逻辑，需要注意区分
-            let mut cur_class_name = "";
-            if let Some(cur_class) = local_dart_gen_context.cur_class {
-                cur_class_name = &cur_class.type_str;
-            }
-            let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
-            let is_normal_method = method.method_type == MethodType::Normal;
-            let is_destructor = method.method_type == MethodType::Destructor;
-            // 是否需要加第一个类的实例参数，模拟调用类实例的方法
-            let need_add_first_class_param= (is_normal_method && !cur_class_name.is_empty()) || is_destructor;
-            /// native函数指针类型的名字
-            let native_fun_type_name = format!("FFI_{}_{}", cur_class_name, method.name);
-            /// 注册函数的名字
-            let native_regist_fun_name = format!("{}_regist", native_fun_type_name);
-            /// 实现函数的名字
-            let dart_callback_fun_name = format!("_{}_{}", cur_class_name, method.name);
-
-            // 生成dart回调函数方法
-            // 函数定义
-            let mut dart_fun_impl = format!("{} {}(", get_dart_fun_type_str(&method.return_type), dart_callback_fun_name);
-            if need_add_first_class_param {
-                dart_fun_impl.push_str("int native, ");
-            }
-            for param in &method.params {
-                dart_fun_impl.push_str(&format!("{} {}, ", get_dart_fun_type_str(&param.field_type), param.name));
-            }
-            if need_add_first_class_param || !method.params.is_empty() {
-                dart_fun_impl.truncate(dart_fun_impl.len() - ", ".len());   // 去掉最后一个参数的, 
-            }
-            // 函数实现
-            dart_fun_impl.push_str(&format!(") {{
-    return {}.nativeToObjMap[native]!.target!.{}(", cur_class_name, method.name));
-            for param in &method.params {
-                if param.field_type.type_kind == TypeKind::Class {
-                    dart_fun_impl.push_str(&format!("{}.FromNative({}), ", param.field_type.type_str, param.name));
-                } else {
-                    dart_fun_impl.push_str(&format!("{}, ", param.name));
-                }
-            }
-            if need_add_first_class_param || !method.params.is_empty() {
-                dart_fun_impl.truncate(dart_fun_impl.len() - ", ".len());   // 去掉最后一个参数的, 
-            }
-            dart_fun_impl.push_str(");\n}\n");
-            dart_file.write(dart_fun_impl.as_bytes());
-
-            // 生成用于初始化的内容
-            let exception_default_value_str = get_dart_fun_exception_default_value_str(&method.return_type);
-            let exception_value_str = if exception_default_value_str.is_empty() {
-                "".to_string()
-            } else {
-                format!(", {}", exception_default_value_str)
-            };
-            init_str.push_str(&format!("    {{
-    final Pointer<NativeFunction<{}>> pt = Pointer.fromFunction<{}>({}{});
-    {}(pt);
-    }}\n", native_fun_type_name, native_fun_type_name, dart_callback_fun_name, exception_value_str, native_regist_fun_name));
-        }
-        _ => {
-            unimplemented!("gen_dart_api_for_callback_fun: unknown child");
-        }
-    }
-}
-
-/// Pointer.fromFunction 对于有返回值的函数，必须有个默认值，否则无法编译
-fn get_dart_fun_exception_default_value_str(field_type: &FieldType) -> String {
-    // 基础数据类型
-    if field_type.ptr_level == 0 {
-        match field_type.type_kind {
-            TypeKind::Void => {
-                return "".to_string();
-            }
-            TypeKind::Int64 => {
-                return "0".to_string();
-            }
-            TypeKind::Float => {
-                return "0.0".to_string();
-            }
-            TypeKind::Double => {
-                return "0.0".to_string();
-            }
-            TypeKind::Char => {
-                return "0".to_string();
-            }
-            _ => {
-                unimplemented!("get_dart_fun_type_str: unknown type kind");
-            }
-        }
-    }
-    // class指针
-    // 基础类型的指针
-    return "0".to_string();
 }

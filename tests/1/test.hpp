@@ -7,8 +7,12 @@
 class T1;
 class Callback1 {
 public:
-    Callback1() {};
-    virtual ~Callback1() {};
+    Callback1() {
+        std::cout << "Callback1" << std::endl;
+    };
+    virtual ~Callback1() {
+        std::cout << "~Callback1" << std::endl;
+    };
 
     virtual void onCall(T1* t1) = 0;
     virtual double onDoAdd(int a, float b) = 0;
@@ -16,9 +20,15 @@ public:
 
 class T1 {
 public:
-    T1() {};
-    T1(double d) {};
-    virtual ~T1() {};
+    T1() {
+        std::cout << "T1" << std::endl;
+    };
+    T1(double d) {
+        std::cout << "T1_double" << std::endl;
+    };
+    virtual ~T1() {
+        std::cout << "~T1" << std::endl;
+    };
 
     T1* createT1() {
         return this;

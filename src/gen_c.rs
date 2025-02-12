@@ -126,13 +126,19 @@ fn gen_c_callback_class(c_context: &mut CFileContext, class: &Class) {
     // 子类化的回调类的名字
     let subclass_name = format!("Impl_{}", class.type_str);
 
-    // 生成注册函数的定义
+    // 注册函数的声明和实现
+    let mut regist_decl = String::new();
+    let mut regist_var_decl = String::new();
+    let mut regist_impl = String::new();
     for child in &class.children {
         match child {
             HppElement::Method(method) => {
                 // 这次只生成需要重写的回调函数
                 if method.method_type == MethodType::Normal {
-                    gen_c_callback_regist_decl(c_context, Some(&class), method);
+                    let (local_regist_decl, local_regist_var_decl, local_regist_impl) = get_str_callback_method_regist(Some(&class), method);
+                    regist_decl.push_str(&local_regist_decl);
+                    regist_var_decl.push_str(&local_regist_var_decl);
+                    regist_impl.push_str(&local_regist_impl);
                 }
             }
             HppElement::Field(field) => {
@@ -145,16 +151,18 @@ fn gen_c_callback_class(c_context: &mut CFileContext, class: &Class) {
     }
 
     // 生成回调子类
-    let mut c_class_callback_impl = format!("class {} : {} {{
+    let mut c_class_callback_impl = format!("{}
+class {} : {} {{
 public:
-", subclass_name, class.type_str);
+", regist_var_decl, subclass_name, class.type_str);
 c_context.cc_str.push_str(&c_class_callback_impl);
     for child in &class.children {
         match child {
             HppElement::Method(method) => {
                 // 这次只生成需要重写的回调函数
                 if method.method_type == MethodType::Normal {
-                    gen_c_callback_class_method(c_context, Some(&class), method);
+                    let callback_method_impl = get_str_callback_method_impl(Some(&class), method);
+                    c_context.cc_str.push_str(&callback_method_impl);
                 }
             }
             HppElement::Field(field) => {
@@ -190,36 +198,22 @@ c_context.cc_str.push_str(&c_class_callback_impl);
     }
 
     // 生成注册函数的实现
-    for child in &class.children {
-        match child {
-            HppElement::Method(method) => {
-                // 这次只生成需要重写的回调函数
-                if method.method_type == MethodType::Normal {
-                    gen_c_callback_regist_impl(c_context, Some(&class), method);
-                }
-            }
-            HppElement::Field(field) => {
-                // TODO
-            }
-            _ => {
-                unimplemented!("gen_c_callback_class: unknown child");
-            }
-        }
-    }
+    c_context.cc_str.push_str(&regist_impl);
 
     c_context.cc_str.push_str("\n");
+
+    // 写.h
+    c_context.ch_str.push_str(&format!("{}", regist_decl));
 }
 
-/// 回调类的方法
-fn gen_c_callback_class_method(c_context: &mut CFileContext, class: Option<&Class>, method: &Method) {
+/// 回调方法的实现
+fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> String {
     if (method.method_type == MethodType::Constructor) || (method.method_type == MethodType::Destructor) {
-        return;
+        return "".to_string();
     }
 
     // ffi 中的类型名
     let ffi_class_name = format!("FFI_{}", class.unwrap().type_str);
-    // 函数指针类型的名字
-    let fun_ptr_type_str = format!("{}_{}", ffi_class_name, method.name);
     // 指向函数指针的变量
     let fun_ptr_var_str = format!("{}_{}", class.unwrap().type_str, method.name);
 
@@ -243,13 +237,15 @@ fn gen_c_callback_class_method(c_context: &mut CFileContext, class: Option<&Clas
         c_class_callback_method_impl.truncate(c_class_callback_method_impl.len() - ", ".len()); // 去掉最后一个参数的, 
     }
     c_class_callback_method_impl.push_str(");\n\t};\n");
-    c_context.cc_str.push_str(&c_class_callback_method_impl);
+
+    return c_class_callback_method_impl;
 }
 
 /// 生成注册函数的定义
-fn gen_c_callback_regist_decl(c_context: &mut CFileContext, class: Option<&Class>, method: &Method) {
+/// (.h中的函数指针类型和注册函数定义，.cpp中的函数指针变量定义，.cpp中的注册函数实现)
+fn get_str_callback_method_regist(class: Option<&Class>, method: &Method) -> (String, String, String) {
     if (method.method_type == MethodType::Constructor) || (method.method_type == MethodType::Destructor) {
-        return;
+        return ("".to_string(), "".to_string(), "".to_string());
     }
 
     // ffi 中的类型名
@@ -258,43 +254,30 @@ fn gen_c_callback_regist_decl(c_context: &mut CFileContext, class: Option<&Class
     let fun_ptr_type_str = format!("{}_{}", ffi_class_name, method.name);
     // 指向函数指针的变量
     let fun_ptr_var_str = format!("{}_{}", class.unwrap().type_str, method.name);
+    // 函数参数定义列表
     let params_decl_str = get_str_params_decl(class, method);
 
-    // .h 中的声明
+    // .h中的函数指针类型和注册函数定义
     // 1. 函数指针类型声明
     // 2. 注册函数指针的函数声明
-    let c_class_callback_method_decl = format!("typedef {} (*{})({});
+    let regist_decl = format!("typedef {} (*{})({});
 void {}_regist({} {});
 ",
         get_str_ffi_type(&method.return_type), fun_ptr_type_str, params_decl_str,
         fun_ptr_type_str, fun_ptr_type_str, method.name
     );
-    c_context.ch_str.push_str(&c_class_callback_method_decl);
 
-    // .cpp 中的实现
+    // .cpp中的函数指针变量定义
     // 1. 注册函数指针的实现
-    let fun_ptr_decl = format!("static {} {} = nullptr;\n", fun_ptr_type_str, fun_ptr_var_str);
-    c_context.cc_str.push_str(&fun_ptr_decl);
-}
+    let regist_var_decl = format!("static {} {} = nullptr;\n", fun_ptr_type_str, fun_ptr_var_str);
 
-/// 生成注册函数的实现
-fn gen_c_callback_regist_impl(c_context: &mut CFileContext, class: Option<&Class>, method: &Method) {
-    if (method.method_type == MethodType::Constructor) || (method.method_type == MethodType::Destructor) {
-        return;
-    }
-
-    // ffi 中的类型名
-    let ffi_class_name = format!("FFI_{}", class.unwrap().type_str);
-    // 函数指针类型的名字
-    let fun_ptr_type_str = format!("{}_{}", ffi_class_name, method.name);
-    // 指向函数指针的变量
-    let fun_ptr_var_str = format!("{}_{}", class.unwrap().type_str, method.name);
-
-    let mut fun_ptr_impl = format!("void {}_regist({} {}){{
+    // .cpp中的注册函数实现
+    let regist_impl = format!("void {}_regist({} {}){{
     {} = {};
 }};
 ", fun_ptr_type_str, fun_ptr_type_str, method.name, fun_ptr_var_str, method.name);
-    c_context.cc_str.push_str(&fun_ptr_impl);
+
+    return (regist_decl, regist_var_decl, regist_impl);
 }
 
 fn get_str_ffi_type(field_type: &FieldType) -> String {
@@ -371,7 +354,7 @@ fn get_str_method_impl(class: Option<&Class>, method: &Method) -> String {
 }
 
 /// 函数是不是需要加第一个类的实例参数，模拟调用类实例的调用方法
-fn get_is_need_first_class_param(class: Option<&Class>, method: &Method) -> bool {
+pub fn get_is_need_first_class_param(class: Option<&Class>, method: &Method) -> bool {
     match method.method_type {
         MethodType::Constructor => {
             return false;
