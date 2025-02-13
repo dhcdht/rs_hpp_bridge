@@ -52,6 +52,7 @@ pub struct Method {
 #[derive(Debug, Default)]
 pub struct Field {
     pub name: String,
+    pub field_type: FieldType,
 }
 
 #[derive(Debug, Default)]
@@ -61,7 +62,7 @@ pub struct MethodParam {
 }
 
 /// 类型的种类
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub enum TypeKind {
     #[default]
     Void,
@@ -76,7 +77,7 @@ pub enum TypeKind {
 }
 
 /// 返回值、字段、参数等的类型
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct FieldType {
     /// 类型字符串，包含全修饰的类型名
     pub full_str: String,
@@ -184,6 +185,40 @@ impl Class {
     }
 }
 
+pub trait OptionClassExt {
+    fn get_class_name_or_empty(&self) -> &str;
+}
+impl OptionClassExt for Option<&Class> {
+    fn get_class_name_or_empty(&self) -> &str {
+        match self {
+            Some(class) => class.type_str.as_str(),
+            None => "",
+        }
+    }
+}
+
+impl Method {
+    pub fn new_get_for_field(field: &Field) -> Self {
+        return Method {
+            method_type: MethodType::Normal,
+            name: format!("get_{}", field.name),
+            return_type: field.field_type.clone(),
+            params: vec![],
+        };
+    }
+    pub fn new_set_for_field(field: &Field) -> Self {
+        return Method {
+            method_type: MethodType::Normal,
+            name: format!("set_{}", field.name),
+            return_type: FieldType::new_void(),
+            params: vec![MethodParam {
+                name: field.name.clone(),
+                field_type: field.field_type.clone(),
+            }],
+        };
+    }
+}
+
 impl FieldType {
     pub fn from_clang_type(clang_type: &Option<clang::Type>) -> Self {
         let mut field_type = FieldType::default();
@@ -241,5 +276,14 @@ impl FieldType {
         }
 
         return field_type;
+    }
+
+    pub fn new_void() -> Self {
+        return FieldType {
+            full_str: "void".to_string(),
+            type_str: "void".to_string(),
+            type_kind: TypeKind::Void,
+            ptr_level: 0,
+        };
     }
 }

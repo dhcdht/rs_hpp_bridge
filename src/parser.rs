@@ -191,6 +191,7 @@ fn handle_clang_FieldDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
     }
     let mut field = Field::default();
     field.name = entity.get_name().unwrap_or_default();
+    field.field_type = FieldType::from_clang_type(&entity.get_type());
     let mut element = HppElement::Field(field);
     for child in entity.get_children() {
         visit_parse_clang_entity(&mut element, &child, indent + 1);

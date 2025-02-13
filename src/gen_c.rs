@@ -1,4 +1,4 @@
-use std::{fs, io::Write, path::{Path, PathBuf}, str::FromStr};
+use std::{fs, io::Write, path::{Path, PathBuf}};
 
 use crate::gen_context::*;
 
@@ -101,7 +101,13 @@ c_context.ch_str.push_str(&c_class_decl);
                 gen_c_class_method(c_context, Some(&class), method);
             }
             HppElement::Field(field) => {
-                // TODO
+                let (get_decl, set_decl) = get_str_field_decl(Some(&class), field);
+                c_context.ch_str.push_str(&format!("{}\n", get_decl));
+                c_context.ch_str.push_str(&format!("{}\n", set_decl));
+
+                let (get_impl, set_impl) = get_str_field_impl(Some(&class), field);
+                c_context.cc_str.push_str(&format!("{}\n", get_impl));
+                c_context.cc_str.push_str(&format!("{}\n", set_impl));
             }
             _ => {
                 unimplemented!("gen_c_class: unknown child");
@@ -204,6 +210,50 @@ c_context.cc_str.push_str(&c_class_callback_impl);
 
     // 写.h
     c_context.ch_str.push_str(&format!("{}", regist_decl));
+}
+
+/// (get, set)
+fn get_str_field_decl(class: Option<&Class>, field: &Field) -> (String, String) {
+    // ffi 中的类型名
+    let ffi_class_name = format!("FFI_{}", class.unwrap().type_str);
+    let cur_class_name = class.get_class_name_or_empty();
+
+    let get_decl = format!("{} ffi_{}_get_{}({} obj);", 
+        get_str_ffi_type(&field.field_type), cur_class_name, field.name, ffi_class_name);
+    let set_decl = format!("void ffi_{}_set_{}({} obj, {} {});", 
+        cur_class_name, field.name, ffi_class_name, get_str_ffi_type(&field.field_type), field.name);
+
+    return (get_decl, set_decl);
+}
+
+/// (get, set)
+fn get_str_field_impl(class: Option<&Class>, field: &Field) -> (String, String) {
+    let cur_class_name = class.get_class_name_or_empty();
+
+    let (local_get_decl, local_set_decl) = get_str_field_decl(class, field); 
+    let get_decl = local_get_decl.trim_end_matches(";");
+    let set_decl = local_set_decl.trim_end_matches(";");
+
+    let get_impl_body = get_str_method_impl_body(class, &field.field_type, &field.name, None);
+    let get_impl = format!("{} {{
+    {}* ptr = ({}*)obj;
+    {}
+}}",
+        get_decl,
+        cur_class_name, cur_class_name,
+        get_impl_body,
+    );
+    let ffi_to_cpp_param = get_str_ffi_to_cpp_param_field(&field.field_type, &field.name);
+    let set_impl = format!("{} {{
+    {}* ptr = ({}*)obj;
+    ptr->{} = {};
+}}",
+        set_decl,
+        cur_class_name, cur_class_name,
+        field.name, ffi_to_cpp_param,
+    );
+
+    return (get_impl, set_impl);
 }
 
 /// 回调方法的实现
@@ -331,25 +381,24 @@ fn get_str_method_impl(class: Option<&Class>, method: &Method) -> String {
 }};", method_prefix, param_prefix)
         }
         MethodType::Normal => {
-            let call_prefix = if decl_class_name.is_empty() { "" } else { "ptr->" };
+            let impl_body = get_str_method_impl_body(class, &method.return_type, &method.name, Some(&param_str));
             if method.return_type.type_kind == TypeKind::String {
                 method_impl = format!("{} {{
     {}
-    static std::string retStr = {}{}({});
-    return (const char*)retStr.c_str();
-}};", method_prefix, param_prefix, call_prefix, method.name, param_str);
+    {}
+}};", method_prefix, param_prefix, impl_body);
             } 
             else if (method.return_type.type_kind == TypeKind::Class && 0 == method.return_type.ptr_level) {
                 method_impl = format!("{} {{
     {}
-    return ({})new {}({}{}({}));
-}};", method_prefix, param_prefix, impl_return_type, method.return_type.type_str, call_prefix, method.name, param_str);
+    {}
+}};", method_prefix, param_prefix, impl_body);
             }
             else {
                 method_impl = format!("{} {{
     {}
-    return ({}){}{}({});
-}};", method_prefix, param_prefix, impl_return_type, call_prefix, method.name, param_str);
+    {}
+}};", method_prefix, param_prefix, impl_body);
             }
         }
         _ => {
@@ -358,6 +407,27 @@ fn get_str_method_impl(class: Option<&Class>, method: &Method) -> String {
     }
 
     return method_impl
+}
+
+fn get_str_method_impl_body(class: Option<&Class>, return_field_type: &FieldType, method_name: &str, param_str: Option<&str>) -> String {
+    let impl_return_type = get_str_ffi_type(&return_field_type);
+    let call_prefix = if class.get_class_name_or_empty().is_empty() { "" } else { "ptr->" };
+    // 带有括号的参数列表，如果没有参数则为空字符串（有些直接访问变量的操作，不需要括号）
+    let full_param_str = if param_str.is_none() { 
+        "" 
+    } else { 
+        &format!("({})", param_str.unwrap()) 
+    };
+    if return_field_type.type_kind == TypeKind::String {
+        return format!("static std::string retStr = {}{}{};
+    return (const char*)retStr.c_str();", call_prefix, method_name, full_param_str);
+    } 
+    else if (return_field_type.type_kind == TypeKind::Class && 0 == return_field_type.ptr_level) {
+        return format!("return ({})new {}({}{}{});", impl_return_type, return_field_type.type_str, call_prefix, method_name, full_param_str);
+    }
+    else {
+        return format!("return ({}){}{}{};", impl_return_type, call_prefix, method_name, full_param_str);
+    }
 }
 
 /// 函数是不是需要加第一个类的实例参数，模拟调用类实例的调用方法
@@ -429,18 +499,22 @@ fn get_str_params_impl(class: Option<&Class>, method: &Method) -> (String, Strin
     }
 
     for param in &method.params {
-        if param.field_type.type_kind == TypeKind::String {
-            param_strs.push(format!("std::string({})", param.name));
-        }
-        else if (param.field_type.type_kind == TypeKind::Class && 0 == param.field_type.ptr_level) {
-            param_strs.push(format!("({})(*({}*){})", &param.field_type.full_str, param.field_type.type_str, param.name));
-        } 
-        else {
-            param_strs.push(format!("({}){}", &param.field_type.full_str, param.name));
-        }
+        param_strs.push(get_str_ffi_to_cpp_param_field(&param.field_type, &param.name));
     }
 
     let param_prefixs_str = param_prefixs.join("\n");
     let param_strs_str = param_strs.join(", ");
     return (param_prefixs_str, param_strs_str);
+}
+
+fn get_str_ffi_to_cpp_param_field(field_type: &FieldType, param_name: &str) -> String {
+    if field_type.type_kind == TypeKind::String {
+        return format!("std::string({})", param_name);
+    }
+    else if (field_type.type_kind == TypeKind::Class && 0 == field_type.ptr_level) {
+        return format!("({})(*({}*){})", &field_type.full_str, field_type.type_str, param_name);
+    } 
+    else {
+        return format!("({}){}", &field_type.full_str, param_name);
+    }
 }

@@ -5,6 +5,7 @@
 #include <string>
 
 struct S1 {
+    int iv1;
     std::string sv1;
 };
 
@@ -64,12 +65,14 @@ public:
         return "return std::string";
     }
     S1 testStruct(S1 s) {
-        std::cout << s.sv1 << std::endl;
+        std::cout << "S1: iv1=" << s.iv1 << ", sv1=" << s.sv1 << std::endl;
         return s;
     }
 
 public:
     int sum;
+    S1* s1p;
+    S1 s1;
 
 private:
     int iadd(float a, int b) {

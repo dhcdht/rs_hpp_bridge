@@ -99,7 +99,16 @@ class {} implements Finalizable {{
             dart_file.write(method_impl.as_bytes());
         }
         HppElement::Field(field) => {
-            // TODO
+            let local_dart_gen_context = dart_gen_context.unwrap();
+            let dart_file = local_dart_gen_context.cur_file.as_mut().unwrap();
+
+            // get
+            let get_method = Method::new_get_for_field(field);
+            let get_method_str = get_str_dart_fun(local_dart_gen_context.cur_class, &get_method);
+            // set
+            let set_method = Method::new_set_for_field(field);
+            let set_method_str = get_str_dart_fun(local_dart_gen_context.cur_class, &set_method);
+            dart_file.write(format!("{}\n{}\n", get_method_str, set_method_str).as_bytes());
         }
         _ => {
             unimplemented!("gen_dart_api: unknown child");
@@ -160,7 +169,16 @@ void {}_setDylib(DynamicLibrary dylib) {{
             ffiapi_file.write(format!("{}\n", dart_api_str).as_bytes());
         }
         HppElement::Field(field) => {
-            // TODO
+            let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
+            let ffiapi_file = local_ffiapi_gen_context.cur_file.as_mut().unwrap();
+
+            // get
+            let get_method = Method::new_get_for_field(field);
+            let get_method_str = get_str_dart_api(local_ffiapi_gen_context.cur_class, &get_method);
+            // set
+            let set_method = Method::new_set_for_field(field);
+            let set_method_str = get_str_dart_api(local_ffiapi_gen_context.cur_class, &set_method);
+            ffiapi_file.write(format!("{}\n{}\n", get_method_str, set_method_str).as_bytes());
         }
         _ => {
             unimplemented!("gen_dart_ffiapi: unknown child");
