@@ -588,6 +588,9 @@ fn get_str_dart_api_type(field_type: &FieldType) -> String {
             TypeKind::String => {
                 return "Pointer<Utf8>".to_string();
             }
+            TypeKind::Bool => {
+                return "bool".to_string();
+            }
             TypeKind::Class => {
                 return "int".to_string();
             }
@@ -627,6 +630,9 @@ fn get_str_dart_api_exception_default_value(field_type: &FieldType) -> String {
             }
             TypeKind::Char => {
                 return "0".to_string();
+            }
+            TypeKind::Bool => {
+                return "false".to_string();
             }
             _ => {
                 unimplemented!("get_dart_fun_type_str: unknown type kind");
@@ -682,6 +688,9 @@ fn get_str_native_api_type(field_type: &FieldType) -> String {
             }
             TypeKind::StdPtr => {
                 return "Int64".to_string();
+            }
+            TypeKind::Bool => {
+                return "Bool".to_string();
             }
             _ => {
                 unimplemented!("get_native_fun_type_str: unknown type kind, {:?}", field_type);

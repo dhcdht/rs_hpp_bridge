@@ -244,13 +244,17 @@ fn get_str_field_impl(class: Option<&Class>, field: &Field) -> (String, String) 
         get_impl_body,
     );
     let ffi_to_cpp_param = get_str_ffi_to_cpp_param_field(&field.field_type, &field.name);
+    let mut set_impl_body = format!("ptr->{} = {};", field.name, ffi_to_cpp_param);
+    if field.field_type.ptr_level > 0 && field.field_type.full_str.contains("[") {
+        set_impl_body = format!("memcpy(ptr->{}, {}, sizeof(ptr->{}));", field.name, ffi_to_cpp_param, field.name);        
+    }
     let set_impl = format!("{} {{
     {}* ptr = ({}*)obj;
-    ptr->{} = {};
+    {}
 }}",
         set_decl,
         cur_class_name, cur_class_name,
-        field.name, ffi_to_cpp_param,
+        set_impl_body,
     );
 
     return (get_impl, set_impl);
@@ -332,8 +336,12 @@ void {}_regist({} {});
 
 fn get_str_ffi_type(field_type: &FieldType) -> String {
     match field_type.type_kind {
-        TypeKind::Void | TypeKind::Int64 | TypeKind::Float | TypeKind::Double | TypeKind::Char => {
-            return field_type.full_str.clone();
+        TypeKind::Void | TypeKind::Int64 | TypeKind::Float | TypeKind::Double | TypeKind::Char | TypeKind::Bool => {
+            if field_type.ptr_level == 0 {
+                return field_type.full_str.clone();
+            } else {
+                return format!("{}{}", field_type.type_str, "*".repeat(field_type.ptr_level as usize));
+            }
         }
         TypeKind::String => {
             return "const char*".to_string();
@@ -522,6 +530,10 @@ fn get_str_ffi_to_cpp_param_field(field_type: &FieldType, param_name: &str) -> S
         return format!("({})(*({}*){})", &field_type.full_str, &field_type.full_str, param_name);
     } 
     else {
-        return format!("({}){}", &field_type.full_str, param_name);
+        if field_type.ptr_level > 0 {
+            return format!("({}{}){}", &field_type.type_str, "*".repeat(field_type.ptr_level as usize), param_name);
+        } else {
+            return format!("({}){}", &field_type.full_str, param_name);
+        }
     }
 }

@@ -7,6 +7,9 @@
 struct S1 {
     int iv1;
     std::string sv1;
+    bool varB;
+    float varArr[16];
+    float* varFp;
 };
 
 class T1;
@@ -47,6 +50,9 @@ public:
 
     void intArr(int* a, int size) {
         *a = 10;
+    }
+    float* floatArr(float arr[16]) {
+        return arr;
     }
     void floatPtrPtr(float** a) {
         **a = 10.0f;

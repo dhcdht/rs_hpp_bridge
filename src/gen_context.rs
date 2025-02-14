@@ -76,6 +76,7 @@ pub enum TypeKind {
     Float,
     Double,
     Char,
+    Bool,
 
     String,
 
@@ -226,7 +227,7 @@ impl FieldType {
     pub fn from_clang_type(clang_type: &Option<clang::Type>) -> Self {
         let mut field_type = FieldType::default();
         field_type.full_str = clang_type.unwrap().get_display_name();
-        let lower_full_str = field_type.full_str.to_lowercase();
+        let mut lower_full_str = field_type.full_str.to_lowercase();
 
         // 一些特殊处理的类型
         // std::string
@@ -246,10 +247,17 @@ impl FieldType {
             }
             return field_type;
         }
+        // 数组
+        else if clang_type.unwrap().get_kind() == clang::TypeKind::ConstantArray {
+            lower_full_str = lower_full_str.split_once("[").unwrap_or((&lower_full_str, "")).0.trim().to_string();
+            field_type.ptr_level = 1;
+        }
 
         // 计算指针级别
-        let ptr_level = lower_full_str.chars().rev().take_while(|&c| c == '*').count();
-        field_type.ptr_level = ptr_level as i32;
+        if field_type.ptr_level == 0 {
+            let ptr_level = lower_full_str.chars().rev().take_while(|&c| c == '*').count();
+            field_type.ptr_level = ptr_level as i32;
+        }
         
         let lower_full_str_without_ptr = lower_full_str.trim_end_matches('*').trim();
         match lower_full_str_without_ptr {
@@ -272,6 +280,10 @@ impl FieldType {
             "char" => {
                 field_type.type_kind = TypeKind::Char;
                 field_type.type_str = "char".to_string();
+            }
+            "bool" => {
+                field_type.type_kind = TypeKind::Bool;
+                field_type.type_str = "bool".to_string();
             }
             _ => {
                 // 指针类型
