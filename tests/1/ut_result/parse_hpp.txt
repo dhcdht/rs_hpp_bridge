@@ -1,10 +1,11 @@
 GenContext {
     hpp_elements: [
         File {
-            path: "./tests/1/test.hpp",
+            path: "tests/1/test.hpp",
             children: [
                 Class {
                     type_str: "S1",
+                    class_type: Normal,
                     children: [
                         Field {
                             name: "iv1",
@@ -21,6 +22,51 @@ GenContext {
                                 full_str: "std::string",
                                 type_str: "std::string",
                                 type_kind: String,
+                                ptr_level: 0,
+                            },
+                        },
+                        Field {
+                            name: "varB",
+                            field_type: FieldType {
+                                full_str: "bool",
+                                type_str: "bool",
+                                type_kind: Bool,
+                                ptr_level: 0,
+                            },
+                        },
+                        Field {
+                            name: "varArr",
+                            field_type: FieldType {
+                                full_str: "float[16]",
+                                type_str: "float",
+                                type_kind: Float,
+                                ptr_level: 1,
+                            },
+                        },
+                        Field {
+                            name: "varFp",
+                            field_type: FieldType {
+                                full_str: "float *",
+                                type_str: "float",
+                                type_kind: Float,
+                                ptr_level: 1,
+                            },
+                        },
+                        Field {
+                            name: "varI64",
+                            field_type: FieldType {
+                                full_str: "int64_t",
+                                type_str: "int",
+                                type_kind: Int64,
+                                ptr_level: 0,
+                            },
+                        },
+                        Field {
+                            name: "varSizeT",
+                            field_type: FieldType {
+                                full_str: "size_t",
+                                type_str: "int",
+                                type_kind: Int64,
                                 ptr_level: 0,
                             },
                         },
@@ -47,21 +93,31 @@ GenContext {
                             params: [],
                         },
                     ],
-                    is_abstract: false,
                 },
                 Class {
                     type_str: "StdPtr_S1",
+                    class_type: StdPtr,
                     children: [
                         Method {
                             method_type: Constructor,
                             name: "Constructor",
                             return_type: FieldType {
-                                full_str: "StdPtr_S1 *",
-                                type_str: "StdPtr_S1",
-                                type_kind: Class,
-                                ptr_level: 1,
+                                full_str: "StdPtr_S1",
+                                type_str: "S1",
+                                type_kind: StdPtr,
+                                ptr_level: 0,
                             },
-                            params: [],
+                            params: [
+                                MethodParam {
+                                    name: "obj",
+                                    field_type: FieldType {
+                                        full_str: "S1 *",
+                                        type_str: "S1",
+                                        type_kind: Class,
+                                        ptr_level: 1,
+                                    },
+                                },
+                            ],
                         },
                         Method {
                             method_type: Destructor,
@@ -74,11 +130,22 @@ GenContext {
                             },
                             params: [],
                         },
+                        Method {
+                            method_type: Normal,
+                            name: "get",
+                            return_type: FieldType {
+                                full_str: "S1 *",
+                                type_str: "S1",
+                                type_kind: Class,
+                                ptr_level: 1,
+                            },
+                            params: [],
+                        },
                     ],
-                    is_abstract: false,
                 },
                 Class {
                     type_str: "Callback1",
+                    class_type: Callback,
                     children: [
                         Method {
                             method_type: Constructor,
@@ -154,21 +221,31 @@ GenContext {
                             ],
                         },
                     ],
-                    is_abstract: true,
                 },
                 Class {
                     type_str: "StdPtr_Callback1",
+                    class_type: StdPtr,
                     children: [
                         Method {
                             method_type: Constructor,
                             name: "Constructor",
                             return_type: FieldType {
-                                full_str: "StdPtr_Callback1 *",
-                                type_str: "StdPtr_Callback1",
-                                type_kind: Class,
-                                ptr_level: 1,
+                                full_str: "StdPtr_Callback1",
+                                type_str: "Callback1",
+                                type_kind: StdPtr,
+                                ptr_level: 0,
                             },
-                            params: [],
+                            params: [
+                                MethodParam {
+                                    name: "obj",
+                                    field_type: FieldType {
+                                        full_str: "Callback1 *",
+                                        type_str: "Callback1",
+                                        type_kind: Class,
+                                        ptr_level: 1,
+                                    },
+                                },
+                            ],
                         },
                         Method {
                             method_type: Destructor,
@@ -181,11 +258,22 @@ GenContext {
                             },
                             params: [],
                         },
+                        Method {
+                            method_type: Normal,
+                            name: "get",
+                            return_type: FieldType {
+                                full_str: "Callback1 *",
+                                type_str: "Callback1",
+                                type_kind: Class,
+                                ptr_level: 1,
+                            },
+                            params: [],
+                        },
                     ],
-                    is_abstract: false,
                 },
                 Class {
                     type_str: "T1",
+                    class_type: Normal,
                     children: [
                         Method {
                             method_type: Constructor,
@@ -324,6 +412,27 @@ GenContext {
                         },
                         Method {
                             method_type: Normal,
+                            name: "floatArr",
+                            return_type: FieldType {
+                                full_str: "float *",
+                                type_str: "float",
+                                type_kind: Float,
+                                ptr_level: 1,
+                            },
+                            params: [
+                                MethodParam {
+                                    name: "arr",
+                                    field_type: FieldType {
+                                        full_str: "float[16]",
+                                        type_str: "float",
+                                        type_kind: Float,
+                                        ptr_level: 1,
+                                    },
+                                },
+                            ],
+                        },
+                        Method {
+                            method_type: Normal,
                             name: "floatPtrPtr",
                             return_type: FieldType {
                                 full_str: "void",
@@ -339,6 +448,48 @@ GenContext {
                                         type_str: "float",
                                         type_kind: Float,
                                         ptr_level: 2,
+                                    },
+                                },
+                            ],
+                        },
+                        Method {
+                            method_type: Normal,
+                            name: "testInt64T",
+                            return_type: FieldType {
+                                full_str: "int64_t",
+                                type_str: "int",
+                                type_kind: Int64,
+                                ptr_level: 0,
+                            },
+                            params: [
+                                MethodParam {
+                                    name: "a",
+                                    field_type: FieldType {
+                                        full_str: "int64_t",
+                                        type_str: "int",
+                                        type_kind: Int64,
+                                        ptr_level: 0,
+                                    },
+                                },
+                            ],
+                        },
+                        Method {
+                            method_type: Normal,
+                            name: "testSizeT",
+                            return_type: FieldType {
+                                full_str: "size_t",
+                                type_str: "int",
+                                type_kind: Int64,
+                                ptr_level: 0,
+                            },
+                            params: [
+                                MethodParam {
+                                    name: "a",
+                                    field_type: FieldType {
+                                        full_str: "size_t",
+                                        type_str: "int",
+                                        type_kind: Int64,
+                                        ptr_level: 0,
                                     },
                                 },
                             ],
@@ -497,21 +648,31 @@ GenContext {
                             },
                         },
                     ],
-                    is_abstract: false,
                 },
                 Class {
                     type_str: "StdPtr_T1",
+                    class_type: StdPtr,
                     children: [
                         Method {
                             method_type: Constructor,
                             name: "Constructor",
                             return_type: FieldType {
-                                full_str: "StdPtr_T1 *",
-                                type_str: "StdPtr_T1",
-                                type_kind: Class,
-                                ptr_level: 1,
+                                full_str: "StdPtr_T1",
+                                type_str: "T1",
+                                type_kind: StdPtr,
+                                ptr_level: 0,
                             },
-                            params: [],
+                            params: [
+                                MethodParam {
+                                    name: "obj",
+                                    field_type: FieldType {
+                                        full_str: "T1 *",
+                                        type_str: "T1",
+                                        type_kind: Class,
+                                        ptr_level: 1,
+                                    },
+                                },
+                            ],
                         },
                         Method {
                             method_type: Destructor,
@@ -524,8 +685,18 @@ GenContext {
                             },
                             params: [],
                         },
+                        Method {
+                            method_type: Normal,
+                            name: "get",
+                            return_type: FieldType {
+                                full_str: "T1 *",
+                                type_str: "T1",
+                                type_kind: Class,
+                                ptr_level: 1,
+                            },
+                            params: [],
+                        },
                     ],
-                    is_abstract: false,
                 },
                 Method {
                     method_type: Normal,

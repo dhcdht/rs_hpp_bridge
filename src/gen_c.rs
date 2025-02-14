@@ -342,7 +342,7 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
     match field_type.type_kind {
         TypeKind::Void | TypeKind::Int64 | TypeKind::Float | TypeKind::Double | TypeKind::Char | TypeKind::Bool => {
             if field_type.ptr_level == 0 {
-                return field_type.full_str.clone();
+                return field_type.type_str.clone();
             } else {
                 return format!("{}{}", field_type.type_str, "*".repeat(field_type.ptr_level as usize));
             }

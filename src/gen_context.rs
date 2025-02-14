@@ -265,7 +265,7 @@ impl FieldType {
                 field_type.type_kind = TypeKind::Void;
                 field_type.type_str = "void".to_string();
             }
-            "int" => {
+            "int" | "int64_t" | "size_t" => {
                 field_type.type_kind = TypeKind::Int64;
                 field_type.type_str = "int".to_string();
             }

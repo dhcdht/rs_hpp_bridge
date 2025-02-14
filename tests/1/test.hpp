@@ -10,6 +10,8 @@ struct S1 {
     bool varB;
     float varArr[16];
     float* varFp;
+    int64_t varI64;
+    size_t varSizeT;
 };
 
 class T1;
@@ -56,6 +58,12 @@ public:
     }
     void floatPtrPtr(float** a) {
         **a = 10.0f;
+    }
+    int64_t testInt64T(int64_t a) {
+        return a;
+    }
+    size_t testSizeT(size_t a) {
+        return a;
     }
     void printCharStr(char* str) {
         std::cout << str << std::endl;
