@@ -23,11 +23,15 @@ struct CFileContext<'a> {
 
 fn gen_c_file(gen_context: &GenContext, file: &File, gen_out_dir: &str) {
     let hpp_filename = Path::new(&file.path).file_name().unwrap().to_os_string().into_string().unwrap();
-    let h_filename = hpp_filename.replace(".hpp", "_ffi.h");
+    let filename_without_ext = match hpp_filename.rfind(".") {
+        Some(idx) => &hpp_filename[..idx],
+        None => &hpp_filename,
+    };
+    let h_filename = format!("{}_ffi.h", filename_without_ext);
     let ch_path = PathBuf::new().join(gen_out_dir).join(h_filename.clone()).into_os_string().into_string().unwrap();
     let mut ch_file = fs::File::create(ch_path).unwrap();
 
-    let c_filename = h_filename.replace(".h", ".cpp");
+    let c_filename = format!("{}_ffi.cpp", filename_without_ext);
     let cc_path = PathBuf::new().join(gen_out_dir).join(c_filename.clone()).into_os_string().into_string().unwrap();
     let mut cc_file = fs::File::create(cc_path).unwrap();
 

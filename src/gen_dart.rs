@@ -21,8 +21,12 @@ fn gen_dart_fun<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_o
             let mut dart_gen_context = DartGenContext::default();
 
             let hpp_filename = Path::new(&file.path).file_name().unwrap().to_os_string().into_string().unwrap();
-            let dart_ffiapi_filename = hpp_filename.replace(".hpp", "_ffiapi.dart");
-            let dart_filename = hpp_filename.replace(".hpp", ".dart");
+            let filename_without_ext = match hpp_filename.rfind(".") {
+                Some(idx) => &hpp_filename[..idx],
+                None => &hpp_filename,
+            };
+            let dart_ffiapi_filename = format!("{}_ffiapi.dart", filename_without_ext);
+            let dart_filename = format!("{}.dart", filename_without_ext);
             let dart_path = PathBuf::new().join(gen_out_dir).join(dart_filename.clone()).into_os_string().into_string().unwrap();
             let mut dart_file = fs::File::create(dart_path).unwrap();
 
@@ -122,7 +126,11 @@ fn gen_dart_api<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_o
             let mut ffiapi_gen_context = DartGenContext::default();
 
             let hpp_filename = Path::new(&file.path).file_name().unwrap().to_os_string().into_string().unwrap();
-            let dart_ffiapi_filename = hpp_filename.replace(".hpp", "_ffiapi.dart");
+            let filename_without_ext = match hpp_filename.rfind(".") {
+                Some(idx) => &hpp_filename[..idx],
+                None => &hpp_filename,
+            };
+            let dart_ffiapi_filename = format!("{}_ffiapi.dart", filename_without_ext);
             let dart_ffiapi_path = PathBuf::new().join(gen_out_dir).join(dart_ffiapi_filename.clone()).into_os_string().into_string().unwrap();
             let mut ffiapi_file = fs::File::create(dart_ffiapi_path).unwrap();
 
@@ -138,7 +146,7 @@ void {}_setDylib(DynamicLibrary dylib) {{
   _dylib = dylib;
   return;
 }}
-            \n", hpp_filename.replace(".hpp", "")));
+            \n", filename_without_ext));
             ffiapi_file.write(file_header.as_bytes());
 
             ffiapi_gen_context.cur_file = Some(ffiapi_file);
