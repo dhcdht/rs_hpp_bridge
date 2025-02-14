@@ -4,6 +4,80 @@ GenContext {
             path: "./tests/1/test.hpp",
             children: [
                 Class {
+                    type_str: "S1",
+                    children: [
+                        Field {
+                            name: "iv1",
+                            field_type: FieldType {
+                                full_str: "int",
+                                type_str: "int",
+                                type_kind: Int64,
+                                ptr_level: 0,
+                            },
+                        },
+                        Field {
+                            name: "sv1",
+                            field_type: FieldType {
+                                full_str: "std::string",
+                                type_str: "std::string",
+                                type_kind: String,
+                                ptr_level: 0,
+                            },
+                        },
+                        Method {
+                            method_type: Constructor,
+                            name: "Constructor",
+                            return_type: FieldType {
+                                full_str: "S1 *",
+                                type_str: "S1",
+                                type_kind: Class,
+                                ptr_level: 1,
+                            },
+                            params: [],
+                        },
+                        Method {
+                            method_type: Destructor,
+                            name: "Destructor",
+                            return_type: FieldType {
+                                full_str: "void",
+                                type_str: "void",
+                                type_kind: Void,
+                                ptr_level: 0,
+                            },
+                            params: [],
+                        },
+                    ],
+                    is_abstract: false,
+                },
+                Class {
+                    type_str: "StdPtr_S1",
+                    children: [
+                        Method {
+                            method_type: Constructor,
+                            name: "Constructor",
+                            return_type: FieldType {
+                                full_str: "StdPtr_S1 *",
+                                type_str: "StdPtr_S1",
+                                type_kind: Class,
+                                ptr_level: 1,
+                            },
+                            params: [],
+                        },
+                        Method {
+                            method_type: Destructor,
+                            name: "Destructor",
+                            return_type: FieldType {
+                                full_str: "void",
+                                type_str: "void",
+                                type_kind: Void,
+                                ptr_level: 0,
+                            },
+                            params: [],
+                        },
+                    ],
+                    is_abstract: false,
+                },
+                Class {
                     type_str: "Callback1",
                     children: [
                         Method {
@@ -81,6 +155,34 @@ GenContext {
                         },
                     ],
                     is_abstract: true,
+                },
+                Class {
+                    type_str: "StdPtr_Callback1",
+                    children: [
+                        Method {
+                            method_type: Constructor,
+                            name: "Constructor",
+                            return_type: FieldType {
+                                full_str: "StdPtr_Callback1 *",
+                                type_str: "StdPtr_Callback1",
+                                type_kind: Class,
+                                ptr_level: 1,
+                            },
+                            params: [],
+                        },
+                        Method {
+                            method_type: Destructor,
+                            name: "Destructor",
+                            return_type: FieldType {
+                                full_str: "void",
+                                type_str: "void",
+                                type_kind: Void,
+                                ptr_level: 0,
+                            },
+                            params: [],
+                        },
+                    ],
+                    is_abstract: false,
                 },
                 Class {
                     type_str: "T1",
@@ -304,8 +406,123 @@ GenContext {
                                 },
                             ],
                         },
+                        Method {
+                            method_type: Normal,
+                            name: "testStruct",
+                            return_type: FieldType {
+                                full_str: "S1",
+                                type_str: "S1",
+                                type_kind: Class,
+                                ptr_level: 0,
+                            },
+                            params: [
+                                MethodParam {
+                                    name: "s",
+                                    field_type: FieldType {
+                                        full_str: "S1",
+                                        type_str: "S1",
+                                        type_kind: Class,
+                                        ptr_level: 0,
+                                    },
+                                },
+                            ],
+                        },
+                        Method {
+                            method_type: Normal,
+                            name: "testStdPtr",
+                            return_type: FieldType {
+                                full_str: "std::shared_ptr<S1>",
+                                type_str: "S1",
+                                type_kind: StdPtr,
+                                ptr_level: 0,
+                            },
+                            params: [
+                                MethodParam {
+                                    name: "s",
+                                    field_type: FieldType {
+                                        full_str: "std::shared_ptr<S1>",
+                                        type_str: "S1",
+                                        type_kind: StdPtr,
+                                        ptr_level: 0,
+                                    },
+                                },
+                            ],
+                        },
+                        Method {
+                            method_type: Normal,
+                            name: "testStdPtrCallback",
+                            return_type: FieldType {
+                                full_str: "std::shared_ptr<Callback1>",
+                                type_str: "Callback1",
+                                type_kind: StdPtr,
+                                ptr_level: 0,
+                            },
+                            params: [
+                                MethodParam {
+                                    name: "cb",
+                                    field_type: FieldType {
+                                        full_str: "std::shared_ptr<Callback1>",
+                                        type_str: "Callback1",
+                                        type_kind: StdPtr,
+                                        ptr_level: 0,
+                                    },
+                                },
+                            ],
+                        },
                         Field {
                             name: "sum",
+                            field_type: FieldType {
+                                full_str: "int",
+                                type_str: "int",
+                                type_kind: Int64,
+                                ptr_level: 0,
+                            },
+                        },
+                        Field {
+                            name: "s1p",
+                            field_type: FieldType {
+                                full_str: "S1 *",
+                                type_str: "S1",
+                                type_kind: Class,
+                                ptr_level: 1,
+                            },
+                        },
+                        Field {
+                            name: "s1",
+                            field_type: FieldType {
+                                full_str: "S1",
+                                type_str: "S1",
+                                type_kind: Class,
+                                ptr_level: 0,
+                            },
+                        },
+                    ],
+                    is_abstract: false,
+                },
+                Class {
+                    type_str: "StdPtr_T1",
+                    children: [
+                        Method {
+                            method_type: Constructor,
+                            name: "Constructor",
+                            return_type: FieldType {
+                                full_str: "StdPtr_T1 *",
+                                type_str: "StdPtr_T1",
+                                type_kind: Class,
+                                ptr_level: 1,
+                            },
+                            params: [],
+                        },
+                        Method {
+                            method_type: Destructor,
+                            name: "Destructor",
+                            return_type: FieldType {
+                                full_str: "void",
+                                type_str: "void",
+                                type_kind: Void,
+                                ptr_level: 0,
+                            },
+                            params: [],
                         },
                     ],
                     is_abstract: false,
@@ -355,7 +572,11 @@ GenContext {
         },
     ],
     class_names: [
+        "S1",
+        "StdPtr_S1",
         "Callback1",
+        "StdPtr_Callback1",
         "T1",
+        "StdPtr_T1",
     ],
 }

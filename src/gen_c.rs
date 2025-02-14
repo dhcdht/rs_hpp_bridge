@@ -341,6 +341,9 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
         TypeKind::Class => {
             return format!("FFI_{}", field_type.type_str);
         }
+        TypeKind::StdPtr => {
+            return format!("FFI_StdPtr_{}", field_type.type_str);
+        }
         _ => {
             unimplemented!("get_ffi_type_str: unknown type kind");
         }
@@ -367,10 +370,17 @@ fn get_str_method_impl(class: Option<&Class>, method: &Method) -> String {
     let mut method_impl = String::new();
     match method.method_type {
         MethodType::Constructor => {
-            method_impl = format!("{} {{
+            if method.return_type.type_kind == TypeKind::StdPtr {
+                method_impl = format!("{} {{
+    {}
+    return ({})new std::shared_ptr<{}>({});
+}};", method_prefix, param_prefix, impl_return_type,  method.return_type.type_str, param_str);
+            } else {
+                method_impl = format!("{} {{
     {}
     return ({})new {}({});
 }};", method_prefix, param_prefix, impl_return_type, decl_class_name, param_str);
+            }
         }
         MethodType::Destructor => {
             method_impl = format!("{} {{
@@ -382,24 +392,10 @@ fn get_str_method_impl(class: Option<&Class>, method: &Method) -> String {
         }
         MethodType::Normal => {
             let impl_body = get_str_method_impl_body(class, &method.return_type, &method.name, Some(&param_str));
-            if method.return_type.type_kind == TypeKind::String {
-                method_impl = format!("{} {{
+            method_impl = format!("{} {{
     {}
     {}
 }};", method_prefix, param_prefix, impl_body);
-            } 
-            else if (method.return_type.type_kind == TypeKind::Class && 0 == method.return_type.ptr_level) {
-                method_impl = format!("{} {{
-    {}
-    {}
-}};", method_prefix, param_prefix, impl_body);
-            }
-            else {
-                method_impl = format!("{} {{
-    {}
-    {}
-}};", method_prefix, param_prefix, impl_body);
-            }
         }
         _ => {
             unimplemented!("gen_c_class_method_impl: unknown method type");
@@ -424,6 +420,9 @@ fn get_str_method_impl_body(class: Option<&Class>, return_field_type: &FieldType
     } 
     else if (return_field_type.type_kind == TypeKind::Class && 0 == return_field_type.ptr_level) {
         return format!("return ({})new {}({}{}{});", impl_return_type, return_field_type.type_str, call_prefix, method_name, full_param_str);
+    }
+    else if (return_field_type.type_kind == TypeKind::StdPtr && 0 == return_field_type.ptr_level) {
+        return format!("return ({})new {}({}{}{});", impl_return_type, return_field_type.full_str, call_prefix, method_name, full_param_str);
     }
     else {
         return format!("return ({}){}{}{};", impl_return_type, call_prefix, method_name, full_param_str);
@@ -492,7 +491,12 @@ fn get_str_params_impl(class: Option<&Class>, method: &Method) -> (String, Strin
     let mut param_strs = Vec::new();
     if get_is_need_first_class_param(class, method) {
         if let Some(cur_class) = class {
-            param_prefixs.push(format!("{}* ptr = ({}*)obj;", cur_class.type_str, cur_class.type_str));
+            if cur_class.class_type == ClassType::StdPtr {
+                let suffix = cur_class.type_str.split_once("_").unwrap_or(("", "")).1;
+                param_prefixs.push(format!("std::shared_ptr<{}>* ptr = (std::shared_ptr<{}>*)obj;", suffix, suffix));
+            } else {
+                param_prefixs.push(format!("{}* ptr = ({}*)obj;", cur_class.type_str, cur_class.type_str));
+            }
         } else {
             unimplemented!("method_build_params_impl: need first class param but class is None");
         }
@@ -513,6 +517,9 @@ fn get_str_ffi_to_cpp_param_field(field_type: &FieldType, param_name: &str) -> S
     }
     else if (field_type.type_kind == TypeKind::Class && 0 == field_type.ptr_level) {
         return format!("({})(*({}*){})", &field_type.full_str, field_type.type_str, param_name);
+    }
+    else if (field_type.type_kind == TypeKind::StdPtr && 0 == field_type.ptr_level) {
+        return format!("({})(*({}*){})", &field_type.full_str, &field_type.full_str, param_name);
     } 
     else {
         return format!("({}){}", &field_type.full_str, param_name);

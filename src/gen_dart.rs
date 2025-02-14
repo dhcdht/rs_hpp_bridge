@@ -262,7 +262,12 @@ fn get_str_dart_fun_body(class: Option<&Class>, method: &Method) -> String {
             if (method.return_type.type_kind == TypeKind::Class) {
                 body_prefix.push_str(&format!("return {}.FromNative({}(", get_str_dart_fun_type(&method.return_type), ffiapi_c_method_name));
                 body_suffix.push_str("));");
-            } else {
+            }
+            else if (method.return_type.type_kind == TypeKind::StdPtr) {
+                body_prefix.push_str(&format!("return {}.FromNative({}(", get_str_dart_fun_type(&method.return_type), ffiapi_c_method_name));
+                body_suffix.push_str("));");
+            } 
+            else {
                 body_prefix.push_str(&format!("return {}(", ffiapi_c_method_name));
                 if (method.return_type.type_kind == TypeKind::String) {
                     body_suffix.push_str(").toDartString();");
@@ -384,6 +389,9 @@ fn get_str_dart_fun_params_impl(class: Option<&Class>, method: &Method) -> Strin
         if !class_is_callback && param.field_type.type_kind == TypeKind::Class {
             param_strs.push(format!("{}.getNativePtr()", param.name));
         }
+        else if param.field_type.type_kind == TypeKind::StdPtr {
+            param_strs.push(format!("{}.getNativePtr()", param.name));
+        }
         else if param.field_type.type_kind == TypeKind::String {
             param_strs.push(format!("{}.toNativeUtf8()", param.name))
         }
@@ -474,6 +482,10 @@ fn get_str_dart_fun_type(field_type: &FieldType) -> String {
     // class类型，需要对应 dart class
     if field_type.type_kind == TypeKind::Class {
         return field_type.type_str.clone();
+    }
+    // 智能指针类型，需要对应 dart class
+    else if field_type.type_kind == TypeKind::StdPtr {
+        return format!("StdPtr_{}", field_type.type_str);
     }
 
     // 基础数据类型
@@ -579,6 +591,9 @@ fn get_str_dart_api_type(field_type: &FieldType) -> String {
             TypeKind::Class => {
                 return "int".to_string();
             }
+            TypeKind::StdPtr => {
+                return "int".to_string();
+            }
             _ => {
                 unimplemented!("get_dart_fun_type_str: unknown type kind, {:?}", field_type);
             }
@@ -663,6 +678,9 @@ fn get_str_native_api_type(field_type: &FieldType) -> String {
                 return "Pointer<Utf8>".to_string();
             }
             TypeKind::Class => {
+                return "Int64".to_string();
+            }
+            TypeKind::StdPtr => {
                 return "Int64".to_string();
             }
             _ => {

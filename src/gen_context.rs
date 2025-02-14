@@ -20,14 +20,20 @@ pub struct File {
     pub children: Vec<HppElement>,
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
+pub enum ClassType {
+    #[default]
+    Normal,
+    Callback,
+    StdPtr,
+}
+
 #[derive(Debug, Default)]
 pub struct Class {
     pub type_str: String,
+    pub class_type: ClassType,
 
     pub children: Vec<HppElement>,
-
-    /// 是否是抽象类，也就是用于 callback 的类
-    is_abstract: bool,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -74,6 +80,7 @@ pub enum TypeKind {
     String,
 
     Class,
+    StdPtr,
 }
 
 /// 返回值、字段、参数等的类型
@@ -177,11 +184,7 @@ impl fmt::Debug for HppElement {
 
 impl Class {
     pub fn is_callback(&self) -> bool {
-        self.is_abstract
-    }
-
-    pub fn set_is_abstract(&mut self, is_abstract: bool) {
-        self.is_abstract = is_abstract;
+        return self.class_type == ClassType::Callback
     }
 }
 
@@ -231,6 +234,16 @@ impl FieldType {
             field_type.type_kind = TypeKind::String;
             field_type.full_str = "std::string".to_string();
             field_type.type_str = "std::string".to_string();
+            return field_type;
+        }
+        // std::shared_ptr
+        else if lower_full_str.starts_with("std::shared_ptr") {
+            field_type.type_kind = TypeKind::StdPtr;
+            if let (Some(start), Some(end)) = (field_type.full_str.find('<'), field_type.full_str.rfind('>')) {
+                field_type.type_str = field_type.full_str[start + 1..end].trim().to_string();
+            } else {
+                field_type.type_str = "std::shared_ptr".to_string();
+            }
             return field_type;
         }
 

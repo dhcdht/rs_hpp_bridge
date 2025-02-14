@@ -65,8 +65,17 @@ public:
         return "return std::string";
     }
     S1 testStruct(S1 s) {
-        std::cout << "S1: iv1=" << s.iv1 << ", sv1=" << s.sv1 << std::endl;
+        std::cout << "testStruct S1: iv1=" << s.iv1 << ", sv1=" << s.sv1 << std::endl;
         return s;
+    }
+    std::shared_ptr<S1> testStdPtr(std::shared_ptr<S1> s) {
+        std::cout << "testSharedPtr S1: iv1=" << s->iv1 << ", sv1=" << s->sv1 << std::endl;
+        return s;
+    }
+    std::shared_ptr<Callback1> testStdPtrCallback(std::shared_ptr<Callback1> cb) {
+        cb->onDoAdd(this->sum, 2.0f);
+        cb->onCall(this);
+        return cb;
     }
 
 public:

@@ -71,11 +71,12 @@ fn handle_clang_ClassDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
     if !entity.is_definition() {
         return;
     }
+    let class_name = entity.get_name().unwrap_or_default();
     let mut class = Class::default();
-    class.type_str = entity.get_name().unwrap_or_default();
+    class.type_str = class_name.clone();
     // 如果是抽象类
     if entity.is_abstract_record() {
-        class.set_is_abstract(true);
+        class.class_type = ClassType::Callback;
     }
     let mut element = HppElement::Class(class);
     for child in entity.get_children() {
@@ -86,6 +87,50 @@ fn handle_clang_ClassDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
     element.ensure_destructor();
     
     out_hpp_element.add_child(element);
+
+    // 为每个类生成对应的 StdPtr class
+    let mut stdPtrClass = Class::default();
+    stdPtrClass.type_str = format!("StdPtr_{}", class_name);
+    stdPtrClass.class_type = ClassType::StdPtr;
+    let mut stdptr_element = HppElement::Class(stdPtrClass);
+    // StdPtr class 的构造函数
+    let constructor_method = Method {
+        method_type: MethodType::Constructor,
+        name: "Constructor".to_string(),
+        return_type: FieldType {
+            full_str: format!("StdPtr_{}", class_name),
+            type_str: class_name.clone(),
+            type_kind: TypeKind::StdPtr,
+            ptr_level: 0,
+        },
+        params: vec![MethodParam {
+            name: "obj".to_string(),
+            field_type: FieldType {
+                full_str: format!("{} *", class_name),
+                type_str: class_name.clone(),
+                type_kind: TypeKind::Class,
+                ptr_level: 1,
+            },
+        }],
+    };
+    stdptr_element.add_child(HppElement::Method(constructor_method));
+    // StdPtr class 的析构函数
+    stdptr_element.ensure_destructor();
+    // std::shared_ptr.get()
+    let get_ptr_method = Method {
+        method_type: MethodType::Normal,
+        name: "get".to_string(),
+        return_type: FieldType {
+            full_str: format!("{} *", class_name),
+            type_str: class_name,
+            type_kind: TypeKind::Class,
+            ptr_level: 1,
+        },
+        params: vec![],
+    };
+    stdptr_element.add_child(HppElement::Method(get_ptr_method));
+
+    out_hpp_element.add_child(stdptr_element);
 }
 
 fn visit_parse_hpp_element(out_gen_context: &mut GenContext, hpp_element: &HppElement) {
