@@ -43,7 +43,7 @@ fn gen_c_file(gen_context: &GenContext, file: &File, gen_out_dir: &str) {
 extern \"C\" {{
 ");
     for class_name in &gen_context.class_names {
-        ch_header.push_str(&format!("typedef long FFI_{};\n", class_name));
+        ch_header.push_str(&format!("typedef void* FFI_{};\n", class_name));
     }
     ch_str.push_str(&ch_header);
     let mut cc_str = String::new();
@@ -356,6 +356,9 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
         TypeKind::StdPtr => {
             return format!("FFI_StdPtr_{}", field_type.type_str);
         }
+        TypeKind::StdVector => {
+            return "long".to_string();
+        }
         _ => {
             unimplemented!("get_ffi_type_str: unknown type kind");
         }
@@ -433,7 +436,9 @@ fn get_str_method_impl_body(class: Option<&Class>, return_field_type: &FieldType
     else if (return_field_type.type_kind == TypeKind::Class && 0 == return_field_type.ptr_level) {
         return format!("return ({})new {}({}{}{});", impl_return_type, return_field_type.type_str, call_prefix, method_name, full_param_str);
     }
-    else if (return_field_type.type_kind == TypeKind::StdPtr && 0 == return_field_type.ptr_level) {
+    else if (return_field_type.type_kind == TypeKind::StdPtr && 0 == return_field_type.ptr_level) 
+    || (return_field_type.type_kind == TypeKind::StdVector && 0 == return_field_type.ptr_level) 
+    {
         return format!("return ({})new {}({}{}{});", impl_return_type, return_field_type.full_str, call_prefix, method_name, full_param_str);
     }
     else {
@@ -484,11 +489,7 @@ fn get_str_ffi_decl_class_name(class: Option<&Class>, method: &Method) -> String
 fn get_str_params_decl(class: Option<&Class>, method: &Method) -> String {
     let mut param_strs = Vec::new();
     if get_is_need_first_class_param(class, method) {
-        if method.method_type == MethodType::Destructor {
-            param_strs.push("void* obj".to_string());
-        } else {
-            param_strs.push(format!("FFI_{} obj", get_str_decl_class_name(class, method)));
-        }
+        param_strs.push(format!("FFI_{} obj", get_str_decl_class_name(class, method)));
     }
     for param in &method.params {
         param_strs.push(format!("{} {}", get_str_ffi_type(&param.field_type), param.name));
@@ -530,7 +531,9 @@ fn get_str_ffi_to_cpp_param_field(field_type: &FieldType, param_name: &str) -> S
     else if (field_type.type_kind == TypeKind::Class && 0 == field_type.ptr_level) {
         return format!("({})(*({}*){})", &field_type.full_str, field_type.type_str, param_name);
     }
-    else if (field_type.type_kind == TypeKind::StdPtr && 0 == field_type.ptr_level) {
+    else if (field_type.type_kind == TypeKind::StdPtr && 0 == field_type.ptr_level)
+    || (field_type.type_kind == TypeKind::StdVector && 0 == field_type.ptr_level)
+    {
         return format!("({})(*({}*){})", &field_type.full_str, &field_type.full_str, param_name);
     } 
     else {

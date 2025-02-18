@@ -8,8 +8,8 @@ pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str) {
     let translation_unit = index.parser(hpp_path)
         .arguments(&[
             "-x", "c++", 
-            "-isystem", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/",
             "-isystem", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/",
+            "-isystem", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/",
         ])
         .parse().unwrap();
     let entity = translation_unit.get_entity();
@@ -102,6 +102,7 @@ fn handle_clang_ClassDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
             type_str: class_name.clone(),
             type_kind: TypeKind::StdPtr,
             ptr_level: 0,
+            ..Default::default()
         },
         params: vec![MethodParam {
             name: "obj".to_string(),
@@ -110,6 +111,7 @@ fn handle_clang_ClassDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
                 type_str: class_name.clone(),
                 type_kind: TypeKind::Class,
                 ptr_level: 1,
+                ..Default::default()
             },
         }],
     };
@@ -125,6 +127,7 @@ fn handle_clang_ClassDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
             type_str: class_name,
             type_kind: TypeKind::Class,
             ptr_level: 1,
+            ..Default::default()
         },
         params: vec![],
     };
@@ -169,6 +172,7 @@ fn handle_clang_Constructor(out_hpp_element: &mut HppElement, entity: &clang::En
                     type_str: class.type_str.clone(),
                     type_kind: TypeKind::Class,
                     ptr_level: 1,
+                    ..Default::default()
                 };
             }
             out_hpp_element.add_child(element);
@@ -185,12 +189,7 @@ fn handle_clang_Destructor(out_hpp_element: &mut HppElement) {
             let mut method = Method::default();
             method.method_type = MethodType::Destructor;
             method.name = "Destructor".to_string();
-            method.return_type = FieldType {
-                full_str: "void".to_string(),
-                type_str: "void".to_string(),
-                type_kind: TypeKind::Void,
-                ptr_level: 0,
-            };
+            method.return_type = FieldType::new_void();
             let element = HppElement::Method(method);
         
             out_hpp_element.add_child(element);

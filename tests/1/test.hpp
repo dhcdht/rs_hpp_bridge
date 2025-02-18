@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
 
 struct S1 {
     int iv1;
@@ -12,6 +13,7 @@ struct S1 {
     float* varFp;
     int64_t varI64;
     size_t varSizeT;
+    // std::vector<std::string> varVec;
 };
 
 class T1;
@@ -91,6 +93,12 @@ public:
         cb->onCall(this);
         return cb;
     }
+    // std::vector<int> testStdVector(std::vector<std::string> v, std::vector<std::shared_ptr<S1>> v2) {
+    //     for (auto& s : v) {
+    //         std::cout << s << std::endl;
+    //     }
+    //     return std::vector<int>();
+    // }
 
 public:
     int sum;

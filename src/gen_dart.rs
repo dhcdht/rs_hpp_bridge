@@ -50,21 +50,21 @@ import 'package:ffi/ffi.dart';
             let dart_file_header = local_dart_gen_context.cur_file.as_mut().unwrap();
             let mut class_header = format!("
 class {} implements Finalizable {{
-    late int _nativePtr;
-    int getNativePtr() {{
+    late Pointer<Void> _nativePtr;
+    Pointer<Void> getNativePtr() {{
         return _nativePtr;
     }}
     static final _finalizer = NativeFinalizer(ptr_ffi_{}_Destructor);
 ", 
             class.type_str, class.type_str);
             class_header.push_str(&format!("
-    {}.FromNative(int nativePtr) : _nativePtr = nativePtr {{}}
+    {}.FromNative(Pointer<Void> nativePtr) : _nativePtr = nativePtr {{}}
             \n", class.type_str));
             dart_file_header.write(class_header.as_bytes());
 
             // 回调类的特殊内容
             if class.is_callback() {
-                let callback_header = format!("    static Map<int, WeakReference<{}>> nativeToObjMap = {{}};\n\n", class.type_str);
+                let callback_header = format!("    static Map<Pointer<Void>, WeakReference<{}>> nativeToObjMap = {{}};\n\n", class.type_str);
                 dart_file_header.write(callback_header.as_bytes());
             }
             
@@ -287,11 +287,11 @@ fn get_str_dart_fun_body(class: Option<&Class>, method: &Method) -> String {
         MethodType::Constructor => {
             body_prefix.push_str(&format!("_nativePtr = {}(", ffiapi_c_method_name));
             body_suffix.push_str(");
-        _finalizer.attach(this, Pointer<Void>.fromAddress(_nativePtr));");
+        _finalizer.attach(this, _nativePtr);");
         }
         MethodType::Destructor => {
-            body_prefix.push_str(&format!("return {}(Pointer<Void>.fromAddress(", ffiapi_c_method_name));
-            body_suffix.push_str("));");
+            body_prefix.push_str(&format!("return {}(", ffiapi_c_method_name));
+            body_suffix.push_str(");");
         }
         _ => {
             unimplemented!("gen_dart_api: unknown method type")
@@ -352,13 +352,13 @@ fn get_str_dart_fun_body_for_callback(class: Option<&Class>, method: &Method) ->
         MethodType::Constructor => {
             body_prefix.push_str(&format!("_nativePtr = {}(", ffiapi_c_method_name));
             body_suffix.push_str(&format!(");
-        _finalizer.attach(this, Pointer<Void>.fromAddress(_nativePtr));
+        _finalizer.attach(this, _nativePtr);
         nativeToObjMap[_nativePtr] = WeakReference<Callback1>(this);
         _{}_init();", cur_class_name));
         }
         MethodType::Destructor => {
-            body_prefix.push_str(&format!("return {}(Pointer<Void>.fromAddress(", ffiapi_c_method_name));
-            body_suffix.push_str("));");
+            body_prefix.push_str(&format!("return {}(", ffiapi_c_method_name));
+            body_suffix.push_str(");");
         }
         _ => {
             unimplemented!("gen_dart_api: unknown method type")
@@ -464,7 +464,7 @@ fn get_dart_fun_for_regist_callback(class: Option<&Class>, method: &Method) -> (
 fn get_str_dart_fun_params_decl_for_regist_callback(class: Option<&Class>, method: &Method) -> String {
     let mut param_strs = Vec::new();
     if gen_c::get_is_need_first_class_param(class, method) {
-        param_strs.push("int native".to_string());
+        param_strs.push("Pointer<Void> native".to_string());
     }
     for param in &method.params {
         param_strs.push(format!("{} {}", get_str_dart_api_type(&param.field_type), param.name));
@@ -494,6 +494,10 @@ fn get_str_dart_fun_type(field_type: &FieldType) -> String {
     // 智能指针类型，需要对应 dart class
     else if field_type.type_kind == TypeKind::StdPtr {
         return format!("StdPtr_{}", field_type.type_str);
+    }
+    else if field_type.type_kind == TypeKind::StdVector {
+        let value_type = field_type.value_type.as_ref().unwrap();
+        return format!("StdVector<{}>", get_str_dart_fun_type(value_type));
     }
 
     // 基础数据类型
@@ -561,11 +565,7 @@ late final {} = ptr_{}.asFunction<void Function(Pointer<NativeFunction<{}>>)>();
 fn get_str_dart_api_params_decl(class: Option<&Class>, method: &Method) -> String {
     let mut param_strs = Vec::new();
     if gen_c::get_is_need_first_class_param(class, method) {
-        if method.method_type == MethodType::Destructor {
-            param_strs.push("Pointer<Void>".to_string());
-        } else {
-            param_strs.push("int".to_string());
-        }
+        param_strs.push("Pointer<Void>".to_string());
     }
     for param in &method.params {
         param_strs.push(format!("{}", get_str_dart_api_type(&param.field_type)));
@@ -593,17 +593,20 @@ fn get_str_dart_api_type(field_type: &FieldType) -> String {
             TypeKind::Char => {
                 return "int".to_string();
             }
-            TypeKind::String => {
-                return "Pointer<Utf8>".to_string();
-            }
             TypeKind::Bool => {
                 return "bool".to_string();
             }
+            TypeKind::String => {
+                return "Pointer<Utf8>".to_string();
+            }
             TypeKind::Class => {
-                return "int".to_string();
+                return "Pointer<Void>".to_string();
             }
             TypeKind::StdPtr => {
-                return "int".to_string();
+                return "Pointer<Void>".to_string();
+            }
+            TypeKind::StdVector => {
+                return "Pointer<Void>".to_string();
             }
             _ => {
                 unimplemented!("get_dart_fun_type_str: unknown type kind, {:?}", field_type);
@@ -612,7 +615,7 @@ fn get_str_dart_api_type(field_type: &FieldType) -> String {
     }
     // class指针
     if field_type.type_kind == TypeKind::Class {
-        return "int".to_string();
+        return "Pointer<Void>".to_string();
     }
 
     // 基础类型的指针
@@ -656,11 +659,7 @@ fn get_str_dart_api_exception_default_value(field_type: &FieldType) -> String {
 fn get_str_native_api_params_decl(class: Option<&Class>, method: &Method) -> String {
     let mut param_strs = Vec::new();
     if gen_c::get_is_need_first_class_param(class, method) {
-        if method.method_type == MethodType::Destructor {
-            param_strs.push("Pointer<Void>".to_string());
-        } else {
-            param_strs.push("Int64".to_string());
-        }
+        param_strs.push("Pointer<Void>".to_string());
     }
     for param in &method.params {
         param_strs.push(format!("{}", get_str_native_api_type(&param.field_type)));
@@ -688,17 +687,20 @@ fn get_str_native_api_type(field_type: &FieldType) -> String {
             TypeKind::Char => {
                 return "Int8".to_string();
             }
+            TypeKind::Bool => {
+                return "Bool".to_string();
+            }
             TypeKind::String => {
                 return "Pointer<Utf8>".to_string();
             }
             TypeKind::Class => {
-                return "Int64".to_string();
+                return "Pointer<Void>".to_string();
             }
             TypeKind::StdPtr => {
-                return "Int64".to_string();
+                return "Pointer<Void>".to_string();
             }
-            TypeKind::Bool => {
-                return "Bool".to_string();
+            TypeKind::StdVector => {
+                return "Pointer<Void>".to_string();
             }
             _ => {
                 unimplemented!("get_native_fun_type_str: unknown type kind, {:?}", field_type);
@@ -707,7 +709,7 @@ fn get_str_native_api_type(field_type: &FieldType) -> String {
     }
     // class指针
     if field_type.type_kind == TypeKind::Class {
-        return "Int64".to_string();
+        return "Pointer<Void>".to_string();
     }
 
     // 基础类型的指针

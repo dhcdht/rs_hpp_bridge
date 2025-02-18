@@ -82,6 +82,7 @@ pub enum TypeKind {
 
     Class,
     StdPtr,
+    StdVector,
 }
 
 /// 返回值、字段、参数等的类型
@@ -94,6 +95,9 @@ pub struct FieldType {
     pub type_kind: TypeKind,
     /// 几级指针，0 T, 1 T*, 2 T**
     pub ptr_level: i32,
+
+    /// 如果是模板类型，这里存储模板参数
+    pub value_type: Option<Box<FieldType>>,
 }
 
 impl HppElement {
@@ -131,6 +135,7 @@ impl HppElement {
                     type_str: class.type_str.clone(),
                     type_kind: TypeKind::Class,
                     ptr_level: 1,
+                    ..Default::default()
                 };
                 let element = HppElement::Method(method);
                 class.children.push(element);
@@ -156,12 +161,7 @@ impl HppElement {
                 let mut method = Method::default();
                 method.method_type = MethodType::Destructor;
                 method.name = "Destructor".to_string();
-                method.return_type = FieldType {
-                    full_str: "void".to_string(),
-                    type_str: "void".to_string(),
-                    type_kind: TypeKind::Void,
-                    ptr_level: 0,
-                };
+                method.return_type = FieldType::new_void();
                 let element = HppElement::Method(method);
                 class.children.push(element);
             }
@@ -225,6 +225,8 @@ impl Method {
 
 impl FieldType {
     pub fn from_clang_type(clang_type: &Option<clang::Type>) -> Self {
+        // println!("clang_type: {:?}, {:?}, {:?}", clang_type, clang_type.unwrap().get_kind(), clang_type.unwrap().get_template_argument_types());
+
         let mut field_type = FieldType::default();
         field_type.full_str = clang_type.unwrap().get_display_name();
         let mut lower_full_str = field_type.full_str.to_lowercase();
@@ -251,6 +253,18 @@ impl FieldType {
         else if clang_type.unwrap().get_kind() == clang::TypeKind::ConstantArray {
             lower_full_str = lower_full_str.split_once("[").unwrap_or((&lower_full_str, "")).0.trim().to_string();
             field_type.ptr_level = 1;
+        }
+        // std::vector
+        else if lower_full_str.starts_with("std::vector") {
+            field_type.type_kind = TypeKind::StdVector;
+            field_type.type_str = clang_type.unwrap().get_display_name();
+
+            let template_args = clang_type.unwrap().get_template_argument_types().unwrap_or_default();
+            let value_clang_type = template_args.first().unwrap();
+            let value_type = FieldType::from_clang_type(value_clang_type);
+
+            field_type.value_type = Some(Box::new(value_type));
+            return field_type;
         }
 
         // 计算指针级别
@@ -307,8 +321,7 @@ impl FieldType {
         return FieldType {
             full_str: "void".to_string(),
             type_str: "void".to_string(),
-            type_kind: TypeKind::Void,
-            ptr_level: 0,
+            ..Default::default()
         };
     }
 }

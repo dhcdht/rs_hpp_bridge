@@ -18,13 +18,13 @@ struct Args {
     input: String,
 
     /// 输出的文件放到哪个文件夹
-    #[arg(short, long, default_value = "")]
+    #[arg(short, long, default_value = "tests/1/output")]
     outdir: String,
 }
 
 fn main() {
     let args = Args::parse();
-    println!("{:#?}", args);
+    // println!("{:#?}", args);
 
     let mut input_content_files = vec![];
     if !args.input.is_empty() {
@@ -51,7 +51,7 @@ fn main() {
     let h_files: Vec<_> = input_content_files.iter().map(|name| parent.join(name)).collect();
     // println!("h_files: {:#?}", h_files);
 
-    let gen_out_dir = "./tests/1/output/";
+    let gen_out_dir = &args.outdir;
     fs::remove_dir_all(gen_out_dir);
     fs::create_dir_all(gen_out_dir);
     for h_file in &h_files {
