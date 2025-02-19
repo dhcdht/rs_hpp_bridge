@@ -271,7 +271,9 @@ fn get_str_dart_fun_body(class: Option<&Class>, method: &Method) -> String {
                 body_prefix.push_str(&format!("return {}.FromNative({}(", get_str_dart_fun_type(&method.return_type), ffiapi_c_method_name));
                 body_suffix.push_str("));");
             }
-            else if (method.return_type.type_kind == TypeKind::StdPtr) {
+            else if (method.return_type.type_kind == TypeKind::StdPtr) 
+            || method.return_type.type_kind == TypeKind::StdVector
+            {
                 body_prefix.push_str(&format!("return {}.FromNative({}(", get_str_dart_fun_type(&method.return_type), ffiapi_c_method_name));
                 body_suffix.push_str("));");
             } 
@@ -397,7 +399,9 @@ fn get_str_dart_fun_params_impl(class: Option<&Class>, method: &Method) -> Strin
         if !class_is_callback && param.field_type.type_kind == TypeKind::Class {
             param_strs.push(format!("{}.getNativePtr()", param.name));
         }
-        else if param.field_type.type_kind == TypeKind::StdPtr {
+        else if param.field_type.type_kind == TypeKind::StdPtr 
+        || param.field_type.type_kind == TypeKind::StdVector
+        {
             param_strs.push(format!("{}.getNativePtr()", param.name));
         }
         else if param.field_type.type_kind == TypeKind::String {
@@ -497,7 +501,7 @@ fn get_str_dart_fun_type(field_type: &FieldType) -> String {
     }
     else if field_type.type_kind == TypeKind::StdVector {
         let value_type = field_type.value_type.as_ref().unwrap();
-        return format!("StdVector<{}>", get_str_dart_fun_type(value_type));
+        return format!("StdVector_{}", get_str_dart_fun_type(value_type));
     }
 
     // 基础数据类型

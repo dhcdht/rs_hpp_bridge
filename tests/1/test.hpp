@@ -93,12 +93,12 @@ public:
         cb->onCall(this);
         return cb;
     }
-    // std::vector<int> testStdVector(std::vector<std::string> v, std::vector<std::shared_ptr<S1>> v2) {
-    //     for (auto& s : v) {
-    //         std::cout << s << std::endl;
-    //     }
-    //     return std::vector<int>();
-    // }
+    std::vector<int> testStdVector(std::vector<std::string> v, std::vector<std::shared_ptr<S1>> v2) {
+        for (auto& s : v) {
+            std::cout << s << std::endl;
+        }
+        return std::vector<int>();
+    }
 
 public:
     int sum;

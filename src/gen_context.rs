@@ -3,7 +3,6 @@ use core::fmt;
 #[derive(Debug, Default)]
 pub struct GenContext {
     pub hpp_elements: Vec<HppElement>,
-    pub class_names: Vec<String>,
 }
 
 pub enum HppElement {
@@ -26,6 +25,7 @@ pub enum ClassType {
     Normal,
     Callback,
     StdPtr,
+    StdVector,
 }
 
 #[derive(Debug, Default)]
@@ -34,6 +34,9 @@ pub struct Class {
     pub class_type: ClassType,
 
     pub children: Vec<HppElement>,
+
+    /// 如果是模板类型，这里存储模板参数
+    pub value_type: Option<Box<FieldType>>,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -170,6 +173,106 @@ impl HppElement {
             },
         }
     }
+
+    pub fn new_stdptr_class_element(class_name: String) -> Self {
+        let mut stdptr_class = Class::default();
+        stdptr_class.type_str = format!("StdPtr_{}", class_name);
+        stdptr_class.class_type = ClassType::StdPtr;
+        let mut stdptr_element = HppElement::Class(stdptr_class);
+        // StdPtr class 的构造函数
+        let constructor_method = Method {
+            method_type: MethodType::Constructor,
+            name: "Constructor".to_string(),
+            return_type: FieldType {
+                full_str: format!("StdPtr_{}", class_name),
+                type_str: class_name.clone(),
+                type_kind: TypeKind::StdPtr,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            params: vec![MethodParam {
+                name: "obj".to_string(),
+                field_type: FieldType {
+                    full_str: format!("{} *", class_name),
+                    type_str: class_name.clone(),
+                    type_kind: TypeKind::Class,
+                    ptr_level: 1,
+                    ..Default::default()
+                },
+            }],
+        };
+        stdptr_element.add_child(HppElement::Method(constructor_method));
+        // StdPtr class 的析构函数
+        stdptr_element.ensure_destructor();
+        // std::shared_ptr.get()
+        let get_ptr_method = Method {
+            method_type: MethodType::Normal,
+            name: "get".to_string(),
+            return_type: FieldType {
+                full_str: format!("{} *", class_name),
+                type_str: class_name,
+                type_kind: TypeKind::Class,
+                ptr_level: 1,
+                ..Default::default()
+            },
+            params: vec![],
+        };
+        stdptr_element.add_child(HppElement::Method(get_ptr_method));
+
+        return stdptr_element;
+    }
+
+    pub fn new_stdvector_class_element(field_type: &FieldType) -> Self {
+        let class_name = field_type.get_value_type_str();
+
+        let mut stdvector_class = Class::default();
+        stdvector_class.type_str = format!("StdVector_{}", class_name);
+        stdvector_class.class_type = ClassType::StdVector;
+        stdvector_class.value_type = field_type.value_type.clone();
+        let mut stdvector_element = HppElement::Class(stdvector_class);
+        // StdVector class 的构造函数
+        let constructor_method = Method {
+            method_type: MethodType::Constructor,
+            name: "Constructor".to_string(),
+            return_type: field_type.clone(),
+            params: vec![],
+        };
+        stdvector_element.add_child(HppElement::Method(constructor_method));
+        // StdPtr class 的析构函数
+        stdvector_element.ensure_destructor();
+        // std::shared_ptr.get()
+        let size_method = Method {
+            method_type: MethodType::Normal,
+            name: "size".to_string(),
+            return_type: FieldType {
+                full_str: "int".to_string(),
+                type_str: "int".to_string(),
+                type_kind: TypeKind::Int64,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            params: vec![],
+        };
+        stdvector_element.add_child(HppElement::Method(size_method));
+        let get_method = Method {
+            method_type: MethodType::Normal,
+            name: "at".to_string(),
+            return_type: (**field_type.value_type.as_ref().unwrap()).clone(),
+            params: vec![MethodParam {
+                name: "index".to_string(),
+                field_type: FieldType {
+                    full_str: "int".to_string(),
+                    type_str: "int".to_string(),
+                    type_kind: TypeKind::Int64,
+                    ptr_level: 0,
+                    ..Default::default()
+                },
+            }],
+        };
+        stdvector_element.add_child(HppElement::Method(get_method));
+
+        return stdvector_element;
+    }
 }
 
 impl fmt::Debug for HppElement {
@@ -236,7 +339,7 @@ impl FieldType {
         if lower_full_str == "std::string" || lower_full_str == "string" {
             field_type.type_kind = TypeKind::String;
             field_type.full_str = "std::string".to_string();
-            field_type.type_str = "std::string".to_string();
+            field_type.type_str = "String".to_string();
             return field_type;
         }
         // std::shared_ptr
@@ -323,5 +426,17 @@ impl FieldType {
             type_str: "void".to_string(),
             ..Default::default()
         };
+    }
+
+    pub fn get_value_type_str(&self) -> String {
+        if (self.value_type.is_none()) {
+            return "".to_string();
+        }
+        let value_type = self.value_type.as_ref().unwrap();
+        if value_type.type_kind == TypeKind::StdPtr {
+            return format!("StdPtr_{}", value_type.type_str);
+        } else {
+            return value_type.type_str.clone();
+        }
     }
 }

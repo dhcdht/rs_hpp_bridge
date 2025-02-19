@@ -42,8 +42,20 @@ fn gen_c_file(gen_context: &GenContext, file: &File, gen_out_dir: &str) {
 
 extern \"C\" {{
 ");
-    for class_name in &gen_context.class_names {
-        ch_header.push_str(&format!("typedef void* FFI_{};\n", class_name));
+    let mut typedef_names = vec![];
+    for element in &file.children {
+        match element {
+            HppElement::Class(class) => {
+                let typedef_name = class.type_str.to_string();
+                if !typedef_names.contains(&typedef_name) {
+                    typedef_names.push(typedef_name.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    for typedef_name in &typedef_names {
+        ch_header.push_str(&format!("typedef void* FFI_{};\n", typedef_name));
     }
     ch_str.push_str(&ch_header);
     let mut cc_str = String::new();
@@ -357,7 +369,12 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
             return format!("FFI_StdPtr_{}", field_type.type_str);
         }
         TypeKind::StdVector => {
-            return "long".to_string();
+            let value_type = field_type.value_type.as_deref().unwrap();
+            if (value_type.type_kind == TypeKind::String) {
+                return format!("FFI_StdVector_String");
+            } else {
+                return format!("FFI_StdVector_{}", field_type.get_value_type_str());
+            }
         }
         _ => {
             unimplemented!("get_ffi_type_str: unknown type kind");
@@ -389,8 +406,15 @@ fn get_str_method_impl(class: Option<&Class>, method: &Method) -> String {
                 method_impl = format!("{} {{
     {}
     return ({})new std::shared_ptr<{}>({});
-}};", method_prefix, param_prefix, impl_return_type,  method.return_type.type_str, param_str);
-            } else {
+}};", method_prefix, param_prefix, impl_return_type, method.return_type.type_str, param_str);
+            }
+            else if method.return_type.type_kind == TypeKind::StdVector {
+                method_impl = format!("{} {{
+    {}
+    return ({})new std::shared_ptr<{}>({});
+}};", method_prefix, param_prefix, impl_return_type, method.return_type.type_str, param_str);
+            } 
+            else {
                 method_impl = format!("{} {{
     {}
     return ({})new {}({});
@@ -507,7 +531,12 @@ fn get_str_params_impl(class: Option<&Class>, method: &Method) -> (String, Strin
             if cur_class.class_type == ClassType::StdPtr {
                 let suffix = cur_class.type_str.split_once("_").unwrap_or(("", "")).1;
                 param_prefixs.push(format!("std::shared_ptr<{}>* ptr = (std::shared_ptr<{}>*)obj;", suffix, suffix));
-            } else {
+            }
+            else if cur_class.class_type ==  ClassType::StdVector {
+                let suffix = cur_class.value_type.as_deref().unwrap().full_str.clone();
+                param_prefixs.push(format!("std::vector<{}>* ptr = (std::vector<{}>*)obj;", suffix, suffix));
+            }
+            else {
                 param_prefixs.push(format!("{}* ptr = ({}*)obj;", cur_class.type_str, cur_class.type_str));
             }
         } else {

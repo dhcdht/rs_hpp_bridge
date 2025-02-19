@@ -20,7 +20,12 @@ pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str) {
     visit_parse_clang_entity(&mut file_element, &entity, 0);
     // println!("{:#?}", file_element);
 
-    visit_parse_hpp_element(out_gen_context, &file_element);
+    let mut elements = vec![];
+    post_process_hpp_element(out_gen_context, &mut elements, &file_element);
+    for element in elements {
+        file_element.add_child(element);
+    }
+
     out_gen_context.hpp_elements.push(file_element);
 }
 #[test]
@@ -89,62 +94,48 @@ fn handle_clang_ClassDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
     out_hpp_element.add_child(element);
 
     // 为每个类生成对应的 StdPtr class
-    let mut stdPtrClass = Class::default();
-    stdPtrClass.type_str = format!("StdPtr_{}", class_name);
-    stdPtrClass.class_type = ClassType::StdPtr;
-    let mut stdptr_element = HppElement::Class(stdPtrClass);
-    // StdPtr class 的构造函数
-    let constructor_method = Method {
-        method_type: MethodType::Constructor,
-        name: "Constructor".to_string(),
-        return_type: FieldType {
-            full_str: format!("StdPtr_{}", class_name),
-            type_str: class_name.clone(),
-            type_kind: TypeKind::StdPtr,
-            ptr_level: 0,
-            ..Default::default()
-        },
-        params: vec![MethodParam {
-            name: "obj".to_string(),
-            field_type: FieldType {
-                full_str: format!("{} *", class_name),
-                type_str: class_name.clone(),
-                type_kind: TypeKind::Class,
-                ptr_level: 1,
-                ..Default::default()
-            },
-        }],
-    };
-    stdptr_element.add_child(HppElement::Method(constructor_method));
-    // StdPtr class 的析构函数
-    stdptr_element.ensure_destructor();
-    // std::shared_ptr.get()
-    let get_ptr_method = Method {
-        method_type: MethodType::Normal,
-        name: "get".to_string(),
-        return_type: FieldType {
-            full_str: format!("{} *", class_name),
-            type_str: class_name,
-            type_kind: TypeKind::Class,
-            ptr_level: 1,
-            ..Default::default()
-        },
-        params: vec![],
-    };
-    stdptr_element.add_child(HppElement::Method(get_ptr_method));
-
+    let stdptr_element = HppElement::new_stdptr_class_element(class_name);
     out_hpp_element.add_child(stdptr_element);
 }
 
-fn visit_parse_hpp_element(out_gen_context: &mut GenContext, hpp_element: &HppElement) {
-    match hpp_element {
+fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: &mut Vec<HppElement>, cur_hpp_element: &HppElement) {
+    match cur_hpp_element {
         HppElement::File(file) => {
             for child in &file.children {
-                visit_parse_hpp_element(out_gen_context, child);
+                post_process_hpp_element(out_gen_context, out_hpp_elements, child);
             }
         }
         HppElement::Class(class) => {
-            out_gen_context.class_names.push(class.type_str.clone());
+            for child in &class.children {
+                post_process_hpp_element(out_gen_context, out_hpp_elements, child);
+            }
+        }
+        HppElement::Method(method) => {
+            // 当用到了某个类型的 std::vector 时，需要生成这个 std::vector 类对应的方法
+            if (method.return_type.type_kind == TypeKind::StdVector) {
+                let stdvector_element = HppElement::new_stdvector_class_element(&method.return_type);
+                match &stdvector_element {
+                    HppElement::Class(class) => {
+                        out_hpp_elements.push(stdvector_element);
+                    }
+                    _ffi => {
+                        unimplemented!("post_process_hpp_element unimplemented");
+                    }
+                }
+            }
+            for param in &method.params {
+                if (param.field_type.type_kind == TypeKind::StdVector) {
+                        let stdvector_element = HppElement::new_stdvector_class_element(&param.field_type);
+                        match &stdvector_element {
+                            HppElement::Class(class) => {
+                                out_hpp_elements.push(stdvector_element);
+                            }
+                            _ffi => {
+                                unimplemented!("post_process_hpp_element unimplemented");
+                            }
+                        }
+                }
+            }
         }
         _ => {
             // do nothing
