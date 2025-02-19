@@ -57,7 +57,7 @@ fn main() {
     for h_file in &h_files {
         let mut gen_context = gen_context::GenContext::default();
         parser::parse_hpp(&mut gen_context, h_file.as_path().to_str().unwrap());
-        print!("{:#?}", gen_context);
+        // print!("{:#?}", gen_context);
         
         gen_c::gen_c(&gen_context, gen_out_dir);
         gen_dart::gen_dart(&gen_context, gen_out_dir);

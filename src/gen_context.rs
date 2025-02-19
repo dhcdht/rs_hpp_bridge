@@ -5,6 +5,7 @@ pub struct GenContext {
     pub hpp_elements: Vec<HppElement>,
 }
 
+#[derive(PartialEq, Eq)]
 pub enum HppElement {
     File(File),
     Class(Class),
@@ -12,7 +13,7 @@ pub enum HppElement {
     Field(Field),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct File {
     pub path: String,
 
@@ -28,7 +29,7 @@ pub enum ClassType {
     StdVector,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct Class {
     pub type_str: String,
     pub class_type: ClassType,
@@ -50,7 +51,7 @@ pub enum MethodType {
     Destructor,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct Method {
     pub method_type: MethodType,
     pub name: String,
@@ -58,13 +59,13 @@ pub struct Method {
     pub params: Vec<MethodParam>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct Field {
     pub name: String,
     pub field_type: FieldType,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct MethodParam {
     pub name: String,
     pub field_type: FieldType,

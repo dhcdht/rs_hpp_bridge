@@ -76,6 +76,12 @@ fn handle_clang_ClassDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
     if !entity.is_definition() {
         return;
     }
+    if let Some(access) = entity.get_accessibility() {
+        if (access != clang::Accessibility::Public) {
+            return;
+        }
+    }
+    
     let class_name = entity.get_name().unwrap_or_default();
     let mut class = Class::default();
     class.type_str = class_name.clone();
@@ -114,26 +120,45 @@ fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: 
             // 当用到了某个类型的 std::vector 时，需要生成这个 std::vector 类对应的方法
             if (method.return_type.type_kind == TypeKind::StdVector) {
                 let stdvector_element = HppElement::new_stdvector_class_element(&method.return_type);
-                match &stdvector_element {
-                    HppElement::Class(class) => {
-                        out_hpp_elements.push(stdvector_element);
-                    }
-                    _ffi => {
-                        unimplemented!("post_process_hpp_element unimplemented");
+                if !out_hpp_elements.contains(&stdvector_element) {
+                    match &stdvector_element {
+                        HppElement::Class(class) => {
+                            out_hpp_elements.push(stdvector_element);
+                        }
+                        _ffi => {
+                            unimplemented!("post_process_hpp_element unimplemented");
+                        }
                     }
                 }
             }
             for param in &method.params {
                 if (param.field_type.type_kind == TypeKind::StdVector) {
                         let stdvector_element = HppElement::new_stdvector_class_element(&param.field_type);
-                        match &stdvector_element {
-                            HppElement::Class(class) => {
-                                out_hpp_elements.push(stdvector_element);
-                            }
-                            _ffi => {
-                                unimplemented!("post_process_hpp_element unimplemented");
+                        if !out_hpp_elements.contains(&stdvector_element) {
+                            match &stdvector_element {
+                                HppElement::Class(class) => {
+                                    out_hpp_elements.push(stdvector_element);
+                                }
+                                _ffi => {
+                                    unimplemented!("post_process_hpp_element unimplemented");
+                                }
                             }
                         }
+                }
+            }
+        }
+        HppElement::Field(field) => {
+            if field.field_type.type_kind == TypeKind::StdVector {
+                let stdvector_element = HppElement::new_stdvector_class_element(&field.field_type);
+                if !out_hpp_elements.contains(&stdvector_element) {
+                    match &stdvector_element {
+                        HppElement::Class(class) => {
+                            out_hpp_elements.push(stdvector_element);
+                        }
+                        _ffi => {
+                            unimplemented!("post_process_hpp_element unimplemented");
+                        }
+                    }
                 }
             }
         }
@@ -192,9 +217,12 @@ fn handle_clang_Destructor(out_hpp_element: &mut HppElement) {
 }
 
 fn handle_clang_Method(out_hpp_element: &mut HppElement, entity: &clang::Entity<'_>, indent: usize) {
-    if entity.get_accessibility().unwrap() != clang::Accessibility::Public {
-        return;
+    if let Some(access) = entity.get_accessibility() {
+        if (access != clang::Accessibility::Public) {
+            return;
+        }
     }
+
     let mut method = Method::default();
     method.name = entity.get_name().unwrap_or_default();
     method.return_type = FieldType::from_clang_type(&entity.get_result_type());
@@ -221,9 +249,12 @@ fn handle_clang_ParmDecl(out_hpp_element: &mut HppElement, entity: &clang::Entit
 }
 
 fn handle_clang_FieldDecl(out_hpp_element: &mut HppElement, entity: &clang::Entity<'_>, indent: usize) {
-    if entity.get_accessibility().unwrap() != clang::Accessibility::Public {
-        return;
+    if let Some(access) = entity.get_accessibility() {
+        if (access != clang::Accessibility::Public) {
+            return;
+        }
     }
+
     let mut field = Field::default();
     field.name = entity.get_name().unwrap_or_default();
     field.field_type = FieldType::from_clang_type(&entity.get_type());

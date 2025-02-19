@@ -13,7 +13,7 @@ struct S1 {
     float* varFp;
     int64_t varI64;
     size_t varSizeT;
-    // std::vector<std::string> varVec;
+    std::vector<std::string> varVec;
 };
 
 class T1;
@@ -110,6 +110,12 @@ private:
         return a+b;
     };
     float isum;
+
+    struct InvalidSt
+    {
+        int a;
+    };
+    
 };
 
 void standalone_empty() {

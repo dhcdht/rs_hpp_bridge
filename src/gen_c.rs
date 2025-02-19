@@ -126,7 +126,7 @@ c_context.ch_str.push_str(&c_class_decl);
                 c_context.cc_str.push_str(&format!("{}\n", set_impl));
             }
             _ => {
-                unimplemented!("gen_c_class: unknown child");
+                unimplemented!("gen_c_class: unknown child, {:?}", child);
             }
         }
     }
