@@ -49,6 +49,7 @@ import 'package:ffi/ffi.dart';
             // 公共头
             let dart_file_header = local_dart_gen_context.cur_file.as_mut().unwrap();
             let mut class_header = format!("
+{}
 class {} implements Finalizable {{
     late Pointer<Void> _nativePtr;
     Pointer<Void> getNativePtr() {{
@@ -56,6 +57,7 @@ class {} implements Finalizable {{
     }}
     static final _finalizer = NativeFinalizer(ptr_ffi_{}_Destructor);
 ", 
+            class.comment_str.as_ref().unwrap_or(&"".to_string()),
             class.type_str, class.type_str);
             class_header.push_str(&format!("
     {}.FromNative(Pointer<Void> nativePtr) : _nativePtr = nativePtr {{}}
@@ -241,11 +243,13 @@ fn get_str_dart_fun(class: Option<&Class>, method: &Method) -> String {
     }
 
     let dart_fun_impl = format!("    {}
+    {}
     {}({}) {{
         {}
     }}
 ",
         callbck_block,
+        method.comment_str.as_ref().unwrap_or(&"".to_string()),
         fun_name, params_decl_str,
         fun_body,
     );
@@ -650,7 +654,7 @@ fn get_str_dart_api_exception_default_value(field_type: &FieldType) -> String {
                 return "false".to_string();
             }
             _ => {
-                unimplemented!("get_dart_fun_type_str: unknown type kind");
+                unimplemented!("get_dart_fun_type_str: unknown type kind, {:?}", field_type);
             }
         }
     }

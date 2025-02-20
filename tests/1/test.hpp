@@ -5,7 +5,11 @@
 #include <string>
 #include <vector>
 
+/**
+ * 这是一个结构体
+ */
 struct S1 {
+    /// 这是一个int类型的变量
     int iv1;
     std::string sv1;
     bool varB;
@@ -17,8 +21,12 @@ struct S1 {
 };
 
 class T1;
+/**
+ * 这是回调类
+ */
 class Callback1 {
 public:
+    /// 这是一个构造函数
     Callback1() {
         std::cout << "Callback1" << std::endl;
     };
@@ -26,10 +34,13 @@ public:
         std::cout << "~Callback1" << std::endl;
     };
 
-    virtual void onCall(T1* t1) = 0;
-    virtual double onDoAdd(int a, float b) = 0;
+    virtual void onCall(T1* t1) {};
+    virtual double onDoAdd(int a, float b) {};
 };
 
+/**
+ * 这是一个类
+ */
 class T1 {
 public:
     T1() {
@@ -48,10 +59,18 @@ public:
     void prit(T1* a) {
         std::cout << a->sum << std::endl;
     };
+    /**
+     * @brief 
+     * 
+     * @param a 
+     * @param b 
+     * @return int 
+     */
     int add(int a, float b) {
         return a+b;
     };
 
+    /// 这是一个注释
     void intArr(int* a, int size) {
         *a = 10;
     }

@@ -38,6 +38,8 @@ pub struct Class {
 
     /// 如果是模板类型，这里存储模板参数
     pub value_type: Option<Box<FieldType>>,
+    /// 注释
+    pub comment_str: Option<String>,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -57,12 +59,18 @@ pub struct Method {
     pub name: String,
     pub return_type: FieldType,
     pub params: Vec<MethodParam>,
+
+    /// 注释
+    pub comment_str: Option<String>,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Field {
     pub name: String,
     pub field_type: FieldType,
+
+    /// 注释
+    pub comment_str: Option<String>,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -201,6 +209,7 @@ impl HppElement {
                     ..Default::default()
                 },
             }],
+            ..Default::default()
         };
         stdptr_element.add_child(HppElement::Method(constructor_method));
         // StdPtr class 的析构函数
@@ -216,7 +225,7 @@ impl HppElement {
                 ptr_level: 1,
                 ..Default::default()
             },
-            params: vec![],
+            ..Default::default()
         };
         stdptr_element.add_child(HppElement::Method(get_ptr_method));
 
@@ -236,7 +245,7 @@ impl HppElement {
             method_type: MethodType::Constructor,
             name: "Constructor".to_string(),
             return_type: field_type.clone(),
-            params: vec![],
+            ..Default::default()
         };
         stdvector_element.add_child(HppElement::Method(constructor_method));
         // StdPtr class 的析构函数
@@ -252,7 +261,7 @@ impl HppElement {
                 ptr_level: 0,
                 ..Default::default()
             },
-            params: vec![],
+            ..Default::default()
         };
         stdvector_element.add_child(HppElement::Method(size_method));
         let get_method = Method {
@@ -269,6 +278,7 @@ impl HppElement {
                     ..Default::default()
                 },
             }],
+            ..Default::default()
         };
         stdvector_element.add_child(HppElement::Method(get_method));
 
@@ -311,7 +321,8 @@ impl Method {
             method_type: MethodType::Normal,
             name: format!("get_{}", field.name),
             return_type: field.field_type.clone(),
-            params: vec![],
+            comment_str: field.comment_str.clone(),
+            ..Default::default()
         };
     }
     pub fn new_set_for_field(field: &Field) -> Self {
@@ -323,6 +334,8 @@ impl Method {
                 name: field.name.clone(),
                 field_type: field.field_type.clone(),
             }],
+            comment_str: field.comment_str.clone(),
+            ..Default::default()
         };
     }
 }

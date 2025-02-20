@@ -57,7 +57,7 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
     match entity.get_kind() {
         clang::EntityKind::ClassDecl | clang::EntityKind::StructDecl => handle_clang_ClassDecl(out_hpp_element, entity, indent),
         clang::EntityKind::Constructor => handle_clang_Constructor(out_hpp_element, entity, indent),
-        clang::EntityKind::Destructor => handle_clang_Destructor(out_hpp_element),
+        clang::EntityKind::Destructor => handle_clang_Destructor(out_hpp_element, entity),
         clang::EntityKind::Method => handle_clang_Method(out_hpp_element, entity, indent),
         clang::EntityKind::ParmDecl => handle_clang_ParmDecl(out_hpp_element, entity),
         clang::EntityKind::FieldDecl => handle_clang_FieldDecl(out_hpp_element, entity, indent),
@@ -85,10 +85,24 @@ fn handle_clang_ClassDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
     let class_name = entity.get_name().unwrap_or_default();
     let mut class = Class::default();
     class.type_str = class_name.clone();
-    // 如果是抽象类
-    if entity.is_abstract_record() {
-        class.class_type = ClassType::Callback;
+    {
+        // 尝试找出它是不是一个用来回调的类
+        // 如果是抽象类
+        if entity.is_abstract_record() {
+            class.class_type = ClassType::Callback;
+        }
+        // 注释中有 @callback
+        if let Some(comment) = entity.get_comment() {
+            if comment.contains("@callback") {
+                class.class_type = ClassType::Callback;
+            }
+        }
+        // 类名中有 Callback
+        if class_name.contains("Callback") {
+            class.class_type = ClassType::Callback;
+        }
     }
+    class.comment_str = entity.get_comment();
     let mut element = HppElement::Class(class);
     for child in entity.get_children() {
         visit_parse_clang_entity(&mut element, &child, indent + 1);
@@ -181,6 +195,7 @@ fn handle_clang_Constructor(out_hpp_element: &mut HppElement, entity: &clang::En
                 for param in &updated_method.params {
                     method_name.push_str(&format!("_{}", param.field_type.type_str));
                 }
+                updated_method.comment_str = entity.get_comment();
                 updated_method.method_type = MethodType::Constructor;
                 updated_method.name = method_name;
                 updated_method.return_type = FieldType {
@@ -199,13 +214,14 @@ fn handle_clang_Constructor(out_hpp_element: &mut HppElement, entity: &clang::En
     }
 }
 
-fn handle_clang_Destructor(out_hpp_element: &mut HppElement) {
+fn handle_clang_Destructor(out_hpp_element: &mut HppElement, entity: &clang::Entity,) {
     match out_hpp_element {
         HppElement::Class(class) => {
             let mut method = Method::default();
             method.method_type = MethodType::Destructor;
             method.name = "Destructor".to_string();
             method.return_type = FieldType::new_void();
+            method.comment_str = entity.get_comment();
             let element = HppElement::Method(method);
         
             out_hpp_element.add_child(element);
@@ -226,6 +242,7 @@ fn handle_clang_Method(out_hpp_element: &mut HppElement, entity: &clang::Entity<
     let mut method = Method::default();
     method.name = entity.get_name().unwrap_or_default();
     method.return_type = FieldType::from_clang_type(&entity.get_result_type());
+    method.comment_str = entity.get_comment();
     let mut element = HppElement::Method(method);
     for child in entity.get_children() {
         visit_parse_clang_entity(&mut element, &child, indent + 1);
@@ -258,6 +275,7 @@ fn handle_clang_FieldDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
     let mut field = Field::default();
     field.name = entity.get_name().unwrap_or_default();
     field.field_type = FieldType::from_clang_type(&entity.get_type());
+    field.comment_str = entity.get_comment();
     let mut element = HppElement::Field(field);
     for child in entity.get_children() {
         visit_parse_clang_entity(&mut element, &child, indent + 1);
@@ -269,6 +287,7 @@ fn handle_clang_FunctionDecl(out_hpp_element: &mut HppElement, entity: &clang::E
     let mut method = Method::default();
     method.name = entity.get_name().unwrap_or_default();
     method.return_type = FieldType::from_clang_type(&entity.get_result_type());
+    method.comment_str = entity.get_comment();
 
     let mut element = HppElement::Method(method);
     for child in entity.get_children() {
