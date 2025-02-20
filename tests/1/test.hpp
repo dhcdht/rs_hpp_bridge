@@ -5,6 +5,12 @@
 #include <string>
 #include <vector>
 
+enum E1 {
+    E1_A,
+    E1_B,
+    E1_C,
+};
+
 /**
  * 这是一个结构体
  */
@@ -18,6 +24,7 @@ struct S1 {
     int64_t varI64;
     size_t varSizeT;
     std::vector<std::string> varVec;
+    E1 varE1;
 };
 
 class T1;
@@ -35,7 +42,9 @@ public:
     };
 
     virtual void onCall(T1* t1) {};
-    virtual double onDoAdd(int a, float b) {};
+    virtual double onDoAdd(int a, float b) {
+        return 0.0;
+    };
 };
 
 /**
@@ -117,6 +126,10 @@ public:
             std::cout << s << std::endl;
         }
         return std::vector<int>();
+    }
+    E1 testEnum(E1 e) {
+        std::cout << "testEnum E1: " << e << std::endl;
+        return e;
     }
 
 public:

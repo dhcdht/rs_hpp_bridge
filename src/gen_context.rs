@@ -347,6 +347,12 @@ impl FieldType {
         let mut field_type = FieldType::default();
         field_type.full_str = clang_type.unwrap().get_display_name();
         let mut lower_full_str = field_type.full_str.to_lowercase();
+        // enum
+        if let Some(elaborated) = clang_type.unwrap().get_elaborated_type() {
+            if elaborated.get_kind() == clang::TypeKind::Enum {
+                lower_full_str = "int".to_string();
+            }
+        }
 
         // 一些特殊处理的类型
         // std::string
