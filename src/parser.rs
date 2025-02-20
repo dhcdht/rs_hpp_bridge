@@ -238,6 +238,12 @@ fn handle_clang_Method(out_hpp_element: &mut HppElement, entity: &clang::Entity<
             return;
         }
     }
+    if let Some(name) = entity.get_name() {
+        if name.starts_with("operator") {
+            // 说明 entity 是一个重载操作符方法，不 bridge 重载函数
+            return;
+        }
+    }
 
     let mut method = Method::default();
     method.name = entity.get_name().unwrap_or_default();

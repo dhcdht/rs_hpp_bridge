@@ -359,8 +359,8 @@ fn get_str_dart_fun_body_for_callback(class: Option<&Class>, method: &Method) ->
             body_prefix.push_str(&format!("_nativePtr = {}(", ffiapi_c_method_name));
             body_suffix.push_str(&format!(");
         _finalizer.attach(this, _nativePtr);
-        nativeToObjMap[_nativePtr] = WeakReference<Callback1>(this);
-        _{}_init();", cur_class_name));
+        nativeToObjMap[_nativePtr] = WeakReference<{}>(this);
+        _{}_init();", cur_class_name, cur_class_name));
         }
         MethodType::Destructor => {
             body_prefix.push_str(&format!("return {}(", ffiapi_c_method_name));
@@ -652,6 +652,9 @@ fn get_str_dart_api_exception_default_value(field_type: &FieldType) -> String {
             }
             TypeKind::Bool => {
                 return "false".to_string();
+            }
+            TypeKind::Class => {
+                return "nullptr".to_string();
             }
             _ => {
                 unimplemented!("get_dart_fun_type_str: unknown type kind, {:?}", field_type);
