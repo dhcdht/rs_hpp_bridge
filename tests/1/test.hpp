@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <thread>
 
 enum E1 {
     E1_A,
@@ -42,9 +43,10 @@ public:
     };
 
     virtual void onCall(T1* t1) {};
-    virtual double onDoAdd(int a, float b) {
-        return 0.0;
-    };
+    // virtual double onDoAdd(int a, float b) {
+    //     return 0.0;
+    // };
+    virtual void onResponse(bool isSuccess, std::string resposneStr, int errorCode, std::string errorMsg) {};
 };
 
 /**
@@ -101,6 +103,9 @@ public:
 
     void setCallback(Callback1* cb) {
         cb->onDoAdd(this->sum, 2.0f);
+        std::thread([cb, this](){
+            cb->onCall(this);
+        }).detach();
         cb->onCall(this);
     }
 

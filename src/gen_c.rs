@@ -276,6 +276,41 @@ fn get_str_field_impl(class: Option<&Class>, field: &Field) -> (String, String) 
     return (get_impl, set_impl);
 }
 
+// /// 回调方法的实现
+// fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> String {
+//     if (method.method_type == MethodType::Constructor) || (method.method_type == MethodType::Destructor) {
+//         return "".to_string();
+//     }
+
+//     // ffi 中的类型名
+//     let ffi_class_name = format!("FFI_{}", class.unwrap().type_str);
+//     // 指向函数指针的变量
+//     let fun_ptr_var_str = format!("{}_{}", class.unwrap().type_str, method.name);
+
+//     // .cpp 中的实现
+//     // 调用函数指针的函数实现
+//     let mut c_class_callback_method_impl = format!("    virtual {} {}(", 
+//         method.return_type.full_str, method.name);
+//     for param in &method.params {
+//         c_class_callback_method_impl.push_str(&format!("{} {}, ", param.field_type.full_str, param.name));
+//     }
+//     if !method.params.is_empty() {
+//         c_class_callback_method_impl.truncate(c_class_callback_method_impl.len() - ", ".len()); // 去掉最后一个参数的, 
+//     }
+//     c_class_callback_method_impl.push_str(&format!(") override {{
+//         return {}(({})this, ", 
+//         fun_ptr_var_str, ffi_class_name));
+//     for param in &method.params {
+//         c_class_callback_method_impl.push_str(&format!("({}){}, ", get_str_ffi_type(&param.field_type), param.name));
+//     }
+//     if !method.params.is_empty() {
+//         c_class_callback_method_impl.truncate(c_class_callback_method_impl.len() - ", ".len()); // 去掉最后一个参数的, 
+//     }
+//     c_class_callback_method_impl.push_str(");\n\t};\n");
+
+//     return c_class_callback_method_impl;
+// }
+
 /// 回调方法的实现
 fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> String {
     if (method.method_type == MethodType::Constructor) || (method.method_type == MethodType::Destructor) {
@@ -289,27 +324,133 @@ fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> Strin
 
     // .cpp 中的实现
     // 调用函数指针的函数实现
-    let mut c_class_callback_method_impl = format!("    virtual {} {}(", 
-        method.return_type.full_str, method.name);
-    for param in &method.params {
-        c_class_callback_method_impl.push_str(&format!("{} {}, ", param.field_type.full_str, param.name));
-    }
-    if !method.params.is_empty() {
-        c_class_callback_method_impl.truncate(c_class_callback_method_impl.len() - ", ".len()); // 去掉最后一个参数的, 
-    }
-    c_class_callback_method_impl.push_str(&format!(") override {{
-        return {}(({})this, ", 
-        fun_ptr_var_str, ffi_class_name));
-    for param in &method.params {
-        c_class_callback_method_impl.push_str(&format!("({}){}, ", get_str_ffi_type(&param.field_type), param.name));
-    }
-    if !method.params.is_empty() {
-        c_class_callback_method_impl.truncate(c_class_callback_method_impl.len() - ", ".len()); // 去掉最后一个参数的, 
-    }
-    c_class_callback_method_impl.push_str(");\n\t};\n");
+    let args_num = method.params.len()+1;
 
-    return c_class_callback_method_impl;
+    let mut decl_params = Vec::new();
+    for param in &method.params {
+        decl_params.push(format!("{} {}", param.field_type.full_str, param.name));
+    }
+    let decl_params_str = decl_params.join(", ");
+
+    let mut gen_values = Vec::new();
+    let mut values = vec!["&value0".to_string()];
+    for i in 0..method.params.len() {
+        let param = method.params.get(i).unwrap();
+        let (dart_type_enum, dart_type_set_value, convert_str) = get_str_callback_method_impl_dart_cobject_type(&param.field_type);
+        let mut param_name = param.name.clone();
+        if (param.field_type.type_kind == TypeKind::String) {
+            param_name = format!("{}.c_str()", param_name);
+        }
+        gen_values.push(format!("
+        Dart_CObject value{};
+        value{}.type = {};
+        value{}.value.{} = ({}){};
+        ",
+        i+1,
+        i+1, dart_type_enum,
+        i+1, dart_type_set_value, convert_str, param_name,
+        ));
+
+        values.push(format!("&value{}", i+1));
+    }
+    let gen_values_str = gen_values.join("");
+    let values_str = values.join(", ");
+
+    let ret_str = format!("    virtual {} {}({}) override {{
+        {}
+
+        Dart_CObject value0;
+        value0.type = Dart_CObject_kInt64;
+        value0.value.as_int64 = (int64_t)this;
+
+        Dart_CObject* values[] = {{{}}};
+        Dart_CObject args;
+        args.type = Dart_CObject_kArray;
+        args.value.as_array.length = {};
+        args.value.as_array.values = values;
+        Dart_PostCObject_DL((Dart_Port_DL){}, &args);
+}};
+",
+        method.return_type.full_str, method.name, decl_params_str,
+        gen_values_str,
+        values_str,
+        args_num,
+        fun_ptr_var_str,
+    );
+
+    return ret_str;
 }
+
+/**
+ * Dart_CObject 枚举类型, value.xxx 类型, 从C到Dart类型转换类型
+ */
+fn get_str_callback_method_impl_dart_cobject_type(field_type: &FieldType) -> (String, String, String) {
+    match field_type.type_kind {
+        TypeKind::Void => {
+            return ("Dart_CObject_kNull".to_string(), "as_int64".to_string(), "int64_t".to_string());
+        }
+        TypeKind::Int64 => {
+            return ("Dart_CObject_kInt64".to_string(), "as_int64".to_string(), "int64_t".to_string());
+        }
+        TypeKind::Float | TypeKind::Double => {
+            return ("Dart_CObject_kDouble".to_string(), "as_double".to_string(), "double".to_string());
+        }
+        TypeKind::Char => {
+            return ("Dart_CObject_kInt32".to_string(), "as_int32".to_string(), "int32_t".to_string());
+        }
+        TypeKind::Bool => {
+            return ("Dart_CObject_kBool".to_string(), "as_bool".to_string(), "bool".to_string());
+        }
+        TypeKind::String => {
+            return ("Dart_CObject_kString".to_string(), "as_string".to_string(), "char*".to_string());
+        }
+        TypeKind::Class => {
+            return ("Dart_CObject_kInt64".to_string(), "as_int64".to_string(), "int64_t".to_string());
+        }
+        _ => {
+            unimplemented!("get_str_callback_method_impl_dart_cobject_type: unknown type kind {:?}", field_type);
+        }
+    }
+}
+
+// /// 生成注册函数的定义
+// /// (.h中的函数指针类型和注册函数定义，.cpp中的函数指针变量定义，.cpp中的注册函数实现)
+// fn get_str_callback_method_regist(class: Option<&Class>, method: &Method) -> (String, String, String) {
+//     if (method.method_type == MethodType::Constructor) || (method.method_type == MethodType::Destructor) {
+//         return ("".to_string(), "".to_string(), "".to_string());
+//     }
+
+//     // ffi 中的类型名
+//     let ffi_class_name = format!("FFI_{}", class.unwrap().type_str);
+//     // 函数指针类型的名字
+//     let fun_ptr_type_str = format!("{}_{}", ffi_class_name, method.name);
+//     // 指向函数指针的变量
+//     let fun_ptr_var_str = format!("{}_{}", class.unwrap().type_str, method.name);
+//     // 函数参数定义列表
+//     let params_decl_str = get_str_params_decl(class, method);
+
+//     // .h中的函数指针类型和注册函数定义
+//     // 1. 函数指针类型声明
+//     // 2. 注册函数指针的函数声明
+//     let regist_decl = format!("typedef {} (*{})({});
+// void {}_regist({} {});
+// ",
+//         get_str_ffi_type(&method.return_type), fun_ptr_type_str, params_decl_str,
+//         fun_ptr_type_str, fun_ptr_type_str, method.name
+//     );
+
+//     // .cpp中的函数指针变量定义
+//     // 1. 注册函数指针的实现
+//     let regist_var_decl = format!("static {} {} = nullptr;\n", fun_ptr_type_str, fun_ptr_var_str);
+
+//     // .cpp中的注册函数实现
+//     let regist_impl = format!("void {}_regist({} {}){{
+//     {} = {};
+// }};
+// ", fun_ptr_type_str, fun_ptr_type_str, method.name, fun_ptr_var_str, method.name);
+
+//     return (regist_decl, regist_var_decl, regist_impl);
+// }
 
 /// 生成注册函数的定义
 /// (.h中的函数指针类型和注册函数定义，.cpp中的函数指针变量定义，.cpp中的注册函数实现)
@@ -331,21 +472,24 @@ fn get_str_callback_method_regist(class: Option<&Class>, method: &Method) -> (St
     // 1. 函数指针类型声明
     // 2. 注册函数指针的函数声明
     let regist_decl = format!("typedef {} (*{})({});
-void {}_regist({} {});
+void {}_regist(int64_t {});
 ",
         get_str_ffi_type(&method.return_type), fun_ptr_type_str, params_decl_str,
-        fun_ptr_type_str, fun_ptr_type_str, method.name
+        fun_ptr_type_str, method.name
     );
 
     // .cpp中的函数指针变量定义
     // 1. 注册函数指针的实现
-    let regist_var_decl = format!("static {} {} = nullptr;\n", fun_ptr_type_str, fun_ptr_var_str);
+    let regist_var_decl = format!("static int64_t {} = 0;\n", fun_ptr_var_str);
 
     // .cpp中的注册函数实现
-    let regist_impl = format!("void {}_regist({} {}){{
+    let regist_impl = format!("void {}_regist(int64_t {}){{
     {} = {};
 }};
-", fun_ptr_type_str, fun_ptr_type_str, method.name, fun_ptr_var_str, method.name);
+", 
+    fun_ptr_type_str, method.name, 
+    fun_ptr_var_str, method.name,
+);
 
     return (regist_decl, regist_var_decl, regist_impl);
 }

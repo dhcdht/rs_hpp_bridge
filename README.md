@@ -17,7 +17,7 @@
 # 特性
 - [x] c++ 生成 c ffi
 - [x] c++类直接生成bridge语言的类（从bridge语言调用到c++）
-- [x] 回调函数（从c++调用到bridge语言）
+- [x] 异步回调函数（从c++调用到bridge语言）
 - [WIP] 重名 重载函数
 - [x] std::string
 - [x] struct

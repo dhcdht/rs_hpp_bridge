@@ -35,6 +35,7 @@ fn gen_dart_fun<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_o
 import '{}';
 import 'dart:ffi';
 import 'package:ffi/ffi.dart';
+import 'dart:isolate';
             \n", dart_ffiapi_filename);
             dart_file.write(file_header.as_bytes());
 
@@ -148,6 +149,8 @@ void {}_setDylib(DynamicLibrary dylib) {{
   _dylib = dylib;
   return;
 }}
+late final ptr_ffi_Dart_InitializeApiDL = _dylib.lookup<NativeFunction<Int64 Function(Pointer<Void>)>>('Dart_InitializeApiDL');
+late final ffi_Dart_InitializeApiDL = ptr_ffi_Dart_InitializeApiDL.asFunction<int Function(Pointer<Void>)>();
             \n", filename_without_ext));
             ffiapi_file.write(file_header.as_bytes());
 
@@ -205,7 +208,7 @@ fn gen_dart_fun_for_regist_callback<'a>(gen_context: &GenContext, hpp_element: &
 
             let (local_init_str, dart_fun_impl) = get_dart_fun_for_regist_callback(local_dart_gen_context.cur_class, method);
             init_str.push_str(&local_init_str);
-            dart_file.write(dart_fun_impl.as_bytes());
+            // dart_file.write(dart_fun_impl.as_bytes());
         }
         _ => {
             unimplemented!("gen_dart_api_for_callback_fun: unknown child");
@@ -243,15 +246,14 @@ fn get_str_dart_fun(class: Option<&Class>, method: &Method) -> String {
     }
 
     let dart_fun_impl = format!("    {}
-    {}
     {}({}) {{
         {}
     }}
-",
-        callbck_block,
+{}",
         method.comment_str.as_ref().unwrap_or(&"".to_string()),
         fun_name, params_decl_str,
         fun_body,
+        callbck_block,
     );
 
     return dart_fun_impl;
@@ -324,12 +326,54 @@ fn get_str_dart_fun_callback_block(class: Option<&Class>, method: &Method) -> St
         return "".to_string();
     }
 
+    let port_args_str = get_str_port_fun_params_impl(class, method);
     let params_str = get_str_dart_fun_params_decl(class, method);
-    let block_str = format!("{} Function({})? {}_block = null;",
-        get_str_dart_fun_type(&method.return_type), params_str, method.name
+    let block_str = format!("    static final {}_port = ReceivePort()..listen((data) {{
+        final args = data as List;
+        final nativePtr = Pointer<Void>.fromAddress(args[0]);
+        final obj = {}.nativeToObjMap[nativePtr]?.target;
+        obj?.{}({});
+    }});
+    {} Function({})? {}_block = null;",
+        method.name,
+        cur_class_name, 
+        method.name, port_args_str,
+        get_str_dart_fun_type(&method.return_type), params_str, method.name,
     );
 
     return block_str;
+}
+
+fn get_str_port_fun_params_impl(class: Option<&Class>, method: &Method) -> String {
+    // 独立函数和类的函数，都走下边逻辑，需要注意区分
+    let class_is_callback = if let Some(cur_class) = class {
+        cur_class.is_callback()
+    } else {
+        false
+    };
+    let is_destructor = method.method_type == MethodType::Destructor;
+
+    let mut param_strs = Vec::new();
+    if (gen_c::get_is_need_first_class_param(class, method) && !class_is_callback) || is_destructor {
+        param_strs.push("_nativePtr".to_string());
+    }
+    for i in 0..method.params.len() {
+        let index = i+1;
+        let param = &method.params[i];
+        if param.field_type.type_kind == TypeKind::Class {
+            param_strs.push(format!("{}.FromNative(Pointer<Void>.fromAddress(args[{}]))", get_str_dart_fun_type(&param.field_type), index));
+        }
+        else if param.field_type.type_kind == TypeKind::StdPtr 
+        || param.field_type.type_kind == TypeKind::StdVector
+        {
+            param_strs.push(format!("{}.FromNative(Pointer<Void>.fromAddress(args[{}]))", get_str_dart_fun_type(&param.field_type), index));
+        }
+        else {
+            param_strs.push(format!("args[{}]", index));
+        }
+    }
+
+    return param_strs.join(", ");
 }
 
 fn get_str_dart_fun_body_for_callback(class: Option<&Class>, method: &Method) -> String {
@@ -400,6 +444,11 @@ fn get_str_dart_fun_params_impl(class: Option<&Class>, method: &Method) -> Strin
         param_strs.push("_nativePtr".to_string());
     }
     for param in &method.params {
+        if class_is_callback {
+            param_strs.push(format!("{}", param.name));
+            continue;
+        }
+
         if !class_is_callback && param.field_type.type_kind == TypeKind::Class {
             param_strs.push(format!("{}.getNativePtr()", param.name));
         }
@@ -449,12 +498,10 @@ fn get_dart_fun_for_regist_callback(class: Option<&Class>, method: &Method) -> (
     };
     let init_str = format!("    
     {{
-    final Pointer<NativeFunction<{}>> pt = Pointer.fromFunction<{}>({}{});
-    {}(pt);
+    {}({}.{}_port.sendPort.nativePort);
     }}
 ", 
-        native_fun_type_name, native_fun_type_name, dart_callback_fun_name, exception_value_str, 
-        native_regist_fun_name,
+        native_regist_fun_name, cur_class_name, method.name,
     );
 
     // 生成dart回调函数内容
@@ -558,12 +605,12 @@ fn get_str_dart_api_for_regist_callback(class: Option<&Class>, method: &Method) 
     let params_str = get_str_native_api_params_decl(class, method);
 
     let dart_api_str = format!("typedef {} = {} Function({});
-late final ptr_{} = _dylib.lookup<NativeFunction<Void Function(Pointer<NativeFunction<{}>>)>>('{}');
-late final {} = ptr_{}.asFunction<void Function(Pointer<NativeFunction<{}>>)>();
+late final ptr_{} = _dylib.lookup<NativeFunction<Void Function(Int64)>>('{}');
+late final {} = ptr_{}.asFunction<void Function(int)>();
 ", 
         native_fun_type_name, get_str_native_api_type(&method.return_type), params_str,
-        native_regist_fun_name, native_fun_type_name, native_regist_fun_name,
-        native_regist_fun_name, native_regist_fun_name, native_fun_type_name,
+        native_regist_fun_name, native_regist_fun_name,
+        native_regist_fun_name, native_regist_fun_name,
     );
 
     return dart_api_str;
