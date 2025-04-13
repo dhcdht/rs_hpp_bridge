@@ -36,7 +36,7 @@ Future<int> sumAsync(int a, int b) async {
 const String _libName = 'flutter_test_project';
 
 /// The dynamic library in which the symbols for [FlutterTestProjectBindings] can be found.
-final DynamicLibrary _dylib = () {
+final DynamicLibrary flt_dylib = () {
   if (Platform.environment.containsKey('FLUTTER_TEST')) {
     return DynamicLibrary.open('build/macos/Build/Products/Debug/$_libName/$_libName.framework/$_libName');
   }
@@ -52,8 +52,8 @@ final DynamicLibrary _dylib = () {
   throw UnsupportedError('Unknown platform: ${Platform.operatingSystem}');
 }();
 
-/// The bindings to the native functions in [_dylib].
-final FlutterTestProjectBindings _bindings = FlutterTestProjectBindings(_dylib);
+/// The bindings to the native functions in [flt_dylib].
+final FlutterTestProjectBindings _bindings = FlutterTestProjectBindings(flt_dylib);
 
 
 /// A request to compute `sum`.

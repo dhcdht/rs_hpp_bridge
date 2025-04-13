@@ -7,10 +7,13 @@ project(flutter_test_project_library VERSION 0.0.1 LANGUAGES C)
 
 add_library(flutter_test_project SHARED
   "flutter_test_project.c"
+  "test.cpp"
+  # RsHppBridge 生成的文件
+  "test_ffi.cpp"
 )
 
 set_target_properties(flutter_test_project PROPERTIES
-  PUBLIC_HEADER flutter_test_project.h
+  PUBLIC_HEADER flutter_test_project.h test.hpp test_ffi.h
   OUTPUT_NAME "flutter_test_project"
 )
 
