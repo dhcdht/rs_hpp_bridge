@@ -1,0 +1,22 @@
+PODS:
+  - flutter_test_project (0.0.1):
+    - FlutterMacOS
+  - FlutterMacOS (1.0.0)
+
+DEPENDENCIES:
+  - flutter_test_project (from `Flutter/ephemeral/.symlinks/plugins/flutter_test_project/macos`)
+  - FlutterMacOS (from `Flutter/ephemeral`)
+
+EXTERNAL SOURCES:
+  flutter_test_project:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_test_project/macos
+  FlutterMacOS:
+    :path: Flutter/ephemeral
+
+SPEC CHECKSUMS:
+  flutter_test_project: 0effe6e5ed35c398b2d53e3fc33b21434beba143
+  FlutterMacOS: 8f6f14fa908a6fb3fba0cd85dbd81ec4b251fb24
+
+PODFILE CHECKSUM: 7eb978b976557c8c1cd717d8185ec483fd090a82
+
+COCOAPODS: 1.16.2
