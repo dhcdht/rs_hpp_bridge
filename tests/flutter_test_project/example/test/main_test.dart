@@ -95,9 +95,9 @@ void main() {
       expect(pointer.value, 12345);
       calloc.free(pointer); // Free the allocated memory
 
-      // // Test getStaticMessage (Static methods are called on the class itself)
-      // final staticMessage = TestClass.getStaticMessage();
-      // expect(staticMessage, "Hello from C++ static method!");
+      // Test getStaticMessage (Static methods are called on the class itself)
+      final staticMessage = TestClass.getStaticMessage();
+      expect(staticMessage, "Hello from C++ static method!");
 
       // Test getString
       final strResult = t.getString();
@@ -113,9 +113,9 @@ void main() {
       // Let's assume processStruct just prints for now.
       t.processStruct(simpleStruct); // Check C++ console output
 
-      // // Test getStaticValue (Static method)
-      // final staticValue = TestClass.getStaticValue();
-      // expect(staticValue, 42);
+      // Test getStaticValue (Static method)
+      final staticValue = TestClass.getStaticValue();
+      expect(staticValue, 42);
 
       // Test getVector and processVector
       final vec = t.getVector();

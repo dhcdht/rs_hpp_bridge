@@ -33,9 +33,9 @@ void TestClass::modifyIntPtr(int* intPtr) { // 重命名参数 ptr 为 intPtr
     }
 }
 
-// std::string TestClass::getStaticMessage() {
-//     return "Hello from C++ static method!";
-// }
+std::string TestClass::getStaticMessage() {
+    return "Hello from C++ static method!";
+}
 
 std::string TestClass::getString() {
     return "A string from C++";
@@ -49,9 +49,9 @@ void TestClass::processStruct(SimpleStruct s) {
     std::cout << "Processing struct in C++: id=" << s.id << ", name=" << s.name << std::endl;
 }
 
-// int TestClass::getStaticValue() {
-//     return 42;
-// }
+int TestClass::getStaticValue() {
+    return 42;
+}
 
 std::vector<int> TestClass::getVector() {
     return {1, 2, 3, 4, 5};

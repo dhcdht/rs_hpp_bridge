@@ -233,9 +233,10 @@ fn get_str_dart_fun(class: Option<&Class>, method: &Method) -> String {
     };
 
     let mut fun_name = "".to_string();
+    let static_modifier = if method.is_static { "static " } else { "" };
     match method.method_type {
         MethodType::Normal | MethodType::Destructor => {
-            fun_name.push_str(&format!("{} {}", get_str_dart_fun_type(&method.return_type), method.name));
+            fun_name.push_str(&format!("{}{} {}", static_modifier, get_str_dart_fun_type(&method.return_type), method.name));
         }
         MethodType::Constructor => {
             fun_name.push_str(&format!("{}.{}", cur_class_name, method.name));
@@ -668,6 +669,7 @@ fn get_str_dart_api_type(field_type: &FieldType) -> String {
             }
         }
     }
+    
     // class指针
     if field_type.type_kind == TypeKind::Class {
         return "Pointer<Void>".to_string();

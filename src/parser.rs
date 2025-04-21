@@ -249,6 +249,8 @@ fn handle_clang_Method(out_hpp_element: &mut HppElement, entity: &clang::Entity<
     method.name = entity.get_name().unwrap_or_default();
     method.return_type = FieldType::from_clang_type(&entity.get_result_type());
     method.comment_str = entity.get_comment();
+    // 检查是否为静态方法
+    method.is_static = entity.is_static_method();
     let mut element = HppElement::Method(method);
     for child in entity.get_children() {
         visit_parse_clang_entity(&mut element, &child, indent + 1);

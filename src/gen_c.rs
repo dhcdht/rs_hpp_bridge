@@ -590,13 +590,36 @@ fn get_str_method_impl(class: Option<&Class>, method: &Method) -> String {
 
 fn get_str_method_impl_body(class: Option<&Class>, return_field_type: &FieldType, method_name: &str, param_str: Option<&str>) -> String {
     let impl_return_type = get_str_ffi_type(&return_field_type);
-    let call_prefix = if class.get_class_name_or_empty().is_empty() { "" } else { "ptr->" };
+    
+    // 对于静态方法，调用使用类名作为前缀，例如 ClassName::staticMethod()
+    // 对于普通方法，使用 ptr-> 前缀
+    let is_static = if let Some(cls) = class {
+        match class {
+            Some(c) => match c.children.iter().find(|e| if let HppElement::Method(m) = e { m.name == method_name } else { false }) {
+                Some(HppElement::Method(m)) => m.is_static,
+                _ => false
+            },
+            None => false,
+        }
+    } else {
+        false
+    };
+
+    let call_prefix = if class.get_class_name_or_empty().is_empty() { 
+        "" 
+    } else if is_static { 
+        &format!("{}::", class.get_class_name_or_empty()) 
+    } else { 
+        "ptr->" 
+    };
+    
     // 带有括号的参数列表，如果没有参数则为空字符串（有些直接访问变量的操作，不需要括号）
     let full_param_str = if param_str.is_none() { 
         "" 
     } else { 
         &format!("({})", param_str.unwrap()) 
     };
+    
     if return_field_type.type_kind == TypeKind::String {
         return format!("static std::string retStr = \"\";
     retStr = {}{}{};
@@ -617,6 +640,9 @@ fn get_str_method_impl_body(class: Option<&Class>, return_field_type: &FieldType
 
 /// 函数是不是需要加第一个类的实例参数，模拟调用类实例的调用方法
 pub fn get_is_need_first_class_param(class: Option<&Class>, method: &Method) -> bool {
+    if method.is_static {
+        return false;
+    }
     match method.method_type {
         MethodType::Constructor => {
             return false;

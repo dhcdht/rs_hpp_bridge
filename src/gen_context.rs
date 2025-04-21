@@ -59,7 +59,8 @@ pub struct Method {
     pub name: String,
     pub return_type: FieldType,
     pub params: Vec<MethodParam>,
-
+    /// 是否为静态方法
+    pub is_static: bool,
     /// 注释
     pub comment_str: Option<String>,
 }

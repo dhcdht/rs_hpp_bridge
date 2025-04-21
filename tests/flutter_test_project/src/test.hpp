@@ -33,11 +33,10 @@ public:
 public:
     double sum(int a, float b);
     // Add new methods for testing
-    // void printMessage(const char* message);
     std::string getString();
     SimpleStruct getStruct();
     void processStruct(SimpleStruct s);
-    // static int getStaticValue();
+    static int getStaticValue();
     std::vector<int> getVector();
     void processVector(std::vector<int> v);
 
@@ -45,7 +44,7 @@ public:
     void incrementCount(); // 新增增加 count 的方法
     std::string getMessage(); // 新增返回 std::string 的方法
     void modifyIntPtr(int* intPtr); // 重命名参数 ptr 为 intPtr
-    // static std::string getStaticMessage(); // 新增静态方法
+    static std::string getStaticMessage(); // 新增静态方法
 
     // // Callback test
     // void registerCallback(std::shared_ptr<MyCallback> callback);
