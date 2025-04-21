@@ -598,7 +598,8 @@ fn get_str_method_impl_body(class: Option<&Class>, return_field_type: &FieldType
         &format!("({})", param_str.unwrap()) 
     };
     if return_field_type.type_kind == TypeKind::String {
-        return format!("static std::string retStr = {}{}{};
+        return format!("static std::string retStr = \"\";
+    retStr = {}{}{};
     return (const char*)retStr.c_str();", call_prefix, method_name, full_param_str);
     } 
     else if (return_field_type.type_kind == TypeKind::Class && 0 == return_field_type.ptr_level) {
