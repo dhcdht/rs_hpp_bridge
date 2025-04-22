@@ -7,33 +7,6 @@ import 'package:flutter_test_project/test.dart';
 import 'package:flutter_test_project/test_ffiapi.dart';
 import 'package:ffi/ffi.dart'; // Import ffi for Utf8 and allocation
 
-// // Define the Dart implementation of the callback interface
-// class MyCallbackImpl extends MyCallback {
-//   String? lastMessage;
-//   int getIntValue = 999;
-//   bool onCallbackCalled = false;
-//   bool onGetIntCalled = false;
-
-//   @override
-//   void onCallback(Pointer<Utf8> message) {
-//     lastMessage = message.toDartString();
-//     onCallbackCalled = true;
-//     print('Dart: onCallback called with message: $lastMessage');
-//   }
-
-//   @override
-//   int onGetInt() {
-//     onGetIntCalled = true;
-//     print('Dart: onGetInt called, returning: $getIntValue');
-//     return getIntValue;
-//   }
-
-//   // Need to manually manage the lifetime or ensure it lives long enough
-//   // For simplicity in test, we might leak it or manage it within the test scope.
-//   // A better approach involves proper lifecycle management (e.g., using Finalizer).
-//   // For this test, we'll create it within the test and assume it lives long enough.
-// }
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late TestClass testClassInstance; // Declare instance variable
@@ -128,32 +101,53 @@ void main() {
       t.processVector(vec); // Check C++ console output
     });
 
-    // test('test Callback', () async {
-    //   final t = testClassInstance;
-    //   final callbackImpl = MyCallbackImpl();
+    test('test Callback', () async {
 
-    //   // Register the callback
-    //   // IMPORTANT: Need to ensure callbackImpl stays alive.
-    //   // For testing, keeping it in scope might be enough.
-    //   // In real apps, manage lifetime carefully.
-    //   t.registerCallback(callbackImpl);
+      // Initialize the Dart API
+      final _initResult = ffi_Dart_InitializeApiDL(NativeApi.initializeApiDLData);
+      if (_initResult != 0) {
+        throw Exception('Failed to initialize Dart API: $_initResult');
+      }
 
-    //   // Trigger the string callback
-    //   final testMessage = "Hello from Dart!";
-    //   t.triggerCallback(testMessage);
-    //   // Allow some time for async callback if needed, though this FFI call might be sync
-    //   await Future.delayed(Duration(milliseconds: 100));
-    //   expect(callbackImpl.onCallbackCalled, isTrue);
-    //   expect(callbackImpl.lastMessage, testMessage);
+      final t = testClassInstance;
+      final callbackImpl = MyCallback.Constructor();
+      var callbackImpl_onCallback_called = false;
+      var callbackImpl_onCallback_message = "";
+      var callbackImpl_onGetInt_value = 0;
+      callbackImpl.onCallback_block= (message) {
+        print("Dart: Callback received message: $message");
+        callbackImpl_onCallback_called = true;
+        callbackImpl_onCallback_message = message;
+      };
+      callbackImpl.onGetInt_block = (value) {
+        print("Dart: Callback received int: $value");
+        callbackImpl_onGetInt_value = value;
+      };
+      final callbackPtr = StdPtr_MyCallback.Constructor(callbackImpl);
 
-    //   // Trigger the int callback
-    //   t.triggerGetIntCallback();
-    //   await Future.delayed(Duration(milliseconds: 100));
-    //   expect(callbackImpl.onGetIntCalled, isTrue);
-    //   // We can't directly check the return value received by C++ here,
-    //   // but we verified the Dart method was called and returned the expected value.
-    //   // Check C++ console output for "Got int from callback: 999"
-    // });
+      // Register the callback
+      // IMPORTANT: Need to ensure callbackImpl stays alive.
+      // For testing, keeping it in scope might be enough.
+      // In real apps, manage lifetime carefully.
+      t.registerCallback(callbackPtr);
+
+      // Trigger the string callback
+      final testMessage = "test callback message";
+      t.triggerCallback(testMessage);
+      // Allow some time for async callback if needed, though this FFI call might be sync
+      await Future.delayed(Duration(milliseconds: 100));
+      expect(callbackImpl_onCallback_called, isTrue);
+      expect(callbackImpl_onCallback_message, testMessage);
+
+      // Trigger the int callback
+      final testInt = 999;
+      t.triggerGetIntCallback(testInt);
+      await Future.delayed(Duration(milliseconds: 100));
+      expect(callbackImpl_onGetInt_value, testInt);
+      // We can't directly check the return value received by C++ here,
+      // but we verified the Dart method was called and returned the expected value.
+      // Check C++ console output for "Got int from callback: 999"
+    });
 
     // test('test Overload', () async {
     //   final t = testClassInstance;

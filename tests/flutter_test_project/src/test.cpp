@@ -65,30 +65,29 @@ void TestClass::processVector(std::vector<int> v) {
     std::cout << std::endl;
 }
 
-// // Callback implementations
-// void TestClass::registerCallback(std::shared_ptr<MyCallback> callback) {
-//     current_callback = callback;
-//     std::cout << "C++: Callback registered." << std::endl;
-// }
+// Callback implementations
+void TestClass::registerCallback(std::shared_ptr<MyCallback> callback) {
+    current_callback = callback;
+    std::cout << "C++: Callback registered." << std::endl;
+}
 
-// void TestClass::triggerCallback(std::string message) {
-//     if (current_callback) {
-//         std::cout << "C++: Triggering callback with message: " << message << std::endl;
-//         current_callback->onCallback(message);
-//     } else {
-//         std::cout << "C++: No callback registered." << std::endl;
-//     }
-// }
+void TestClass::triggerCallback(std::string message) {
+    if (current_callback) {
+        std::cout << "C++: Triggering callback with message: " << message << std::endl;
+        current_callback->onCallback(message);
+    } else {
+        std::cout << "C++: No callback registered." << std::endl;
+    }
+}
 
-// void TestClass::triggerGetIntCallback() {
-//     if (current_callback) {
-//         std::cout << "C++: Triggering getInt callback." << std::endl;
-//         int result = current_callback->onGetInt();
-//         std::cout << "C++: Got int from callback: " << result << std::endl;
-//     } else {
-//         std::cout << "C++: No callback registered for getInt." << std::endl;
-//     }
-// }
+void TestClass::triggerGetIntCallback(int value) {
+    if (current_callback) {
+        std::cout << "C++: Triggering getInt callback." << std::endl;
+        current_callback->onGetInt(value);
+    } else {
+        std::cout << "C++: No callback registered for getInt." << std::endl;
+    }
+}
 
 // // Overload implementations
 // void TestClass::processData(int data) {

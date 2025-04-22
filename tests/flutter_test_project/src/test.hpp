@@ -13,18 +13,18 @@ struct SimpleStruct {
     std::string name;
 };
 
-// // Define a callback interface (abstract class)
-// class MyCallback {
-// public:
-//     virtual ~MyCallback() = default;
-//     virtual void onCallback(std::string message) = 0;
-//     virtual int onGetInt() = 0;
-// };
+// Define a callback interface (abstract class)
+class MyCallback {
+public:
+    virtual ~MyCallback() = default;
+    virtual void onCallback(std::string message) = 0;
+    virtual void onGetInt(int value) = 0;
+};
 
 class TestClass {
 private: // 添加 private 成员变量
     int count = 0; // 新增成员变量 count
-    // std::shared_ptr<MyCallback> current_callback; // Store the callback
+    std::shared_ptr<MyCallback> current_callback; // Store the callback
 
 public:
     TestClass();
@@ -46,10 +46,10 @@ public:
     void modifyIntPtr(int* intPtr); // 重命名参数 ptr 为 intPtr
     static std::string getStaticMessage(); // 新增静态方法
 
-    // // Callback test
-    // void registerCallback(std::shared_ptr<MyCallback> callback);
-    // void triggerCallback(std::string message);
-    // void triggerGetIntCallback();
+    // Callback test
+    void registerCallback(std::shared_ptr<MyCallback> callback);
+    void triggerCallback(std::string message);
+    void triggerGetIntCallback(int value);
 
     // // Overload test
     // void processData(int data);

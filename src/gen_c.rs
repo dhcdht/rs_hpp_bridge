@@ -62,6 +62,7 @@ extern \"C\" {{
     let cc_header = format!("
 #include \"{}\"
 #include \"{}\"
+#include \"dart_api_dl.h\"
 
 extern \"C\" {{
 
