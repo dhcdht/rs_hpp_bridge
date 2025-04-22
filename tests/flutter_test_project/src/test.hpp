@@ -33,10 +33,10 @@ public:
 public:
     double sum(int a, float b);
     // Add new methods for testing
-    std::string getString();
+    std::string getString(const std::string str);
     SimpleStruct getStruct();
     void processStruct(SimpleStruct s);
-    static int getStaticValue();
+    static int getStaticValue(const int value);
     std::vector<int> getVector();
     void processVector(std::vector<int> v);
 

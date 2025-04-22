@@ -345,8 +345,12 @@ impl FieldType {
     pub fn from_clang_type(clang_type: &Option<clang::Type>) -> Self {
         // println!("clang_type: {:?}, {:?}, {:?}", clang_type, clang_type.unwrap().get_kind(), clang_type.unwrap().get_template_argument_types());
 
+        let mut display_name = clang_type.unwrap().get_display_name();
+        // 去掉修饰符
+        display_name = display_name.replace("const ", "");
+
         let mut field_type = FieldType::default();
-        field_type.full_str = clang_type.unwrap().get_display_name();
+        field_type.full_str = display_name.clone();
         let mut lower_full_str = field_type.full_str.to_lowercase();
         // enum
         if let Some(elaborated) = clang_type.unwrap().get_elaborated_type() {
@@ -381,7 +385,7 @@ impl FieldType {
         // std::vector
         else if lower_full_str.starts_with("std::vector") {
             field_type.type_kind = TypeKind::StdVector;
-            field_type.type_str = clang_type.unwrap().get_display_name();
+            field_type.type_str = display_name.clone();
 
             let template_args = clang_type.unwrap().get_template_argument_types().unwrap_or_default();
             let value_clang_type = template_args.first().unwrap();

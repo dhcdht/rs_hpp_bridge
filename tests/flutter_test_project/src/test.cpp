@@ -37,8 +37,8 @@ std::string TestClass::getStaticMessage() {
     return "Hello from C++ static method!";
 }
 
-std::string TestClass::getString() {
-    return "A string from C++";
+std::string TestClass::getString(const std::string str) {
+    return str;
 }
 
 SimpleStruct TestClass::getStruct() {
@@ -49,8 +49,8 @@ void TestClass::processStruct(SimpleStruct s) {
     std::cout << "Processing struct in C++: id=" << s.id << ", name=" << s.name << std::endl;
 }
 
-int TestClass::getStaticValue() {
-    return 42;
+int TestClass::getStaticValue(const int value) {
+    return value;
 }
 
 std::vector<int> TestClass::getVector() {

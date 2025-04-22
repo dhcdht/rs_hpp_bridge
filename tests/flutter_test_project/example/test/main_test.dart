@@ -100,8 +100,8 @@ void main() {
       expect(staticMessage, "Hello from C++ static method!");
 
       // Test getString
-      final strResult = t.getString();
-      expect(strResult, "A string from C++");
+      final strResult = t.getString("A string from dart");
+      expect(strResult, "A string from dart");
 
       // Test getStruct and processStruct
       final simpleStruct = t.getStruct();
@@ -114,7 +114,7 @@ void main() {
       t.processStruct(simpleStruct); // Check C++ console output
 
       // Test getStaticValue (Static method)
-      final staticValue = TestClass.getStaticValue();
+      final staticValue = TestClass.getStaticValue(42);
       expect(staticValue, 42);
 
       // Test getVector and processVector
