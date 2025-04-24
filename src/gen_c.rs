@@ -342,8 +342,11 @@ fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> Strin
         if (param.field_type.type_kind == TypeKind::String) {
             param_name = format!("{}.c_str()", param_name);
         }
-        if (param.field_type.type_kind == TypeKind::Class) && (param.field_type.ptr_level == 0) {
+        else if (param.field_type.type_kind == TypeKind::Class) && (param.field_type.ptr_level == 0) {
             param_name = format!("(new {}({}))", param.field_type.type_str, param_name);
+        }
+        else if (param.field_type.type_kind == TypeKind::StdPtr || param.field_type.type_kind == TypeKind::StdVector) {
+            param_name = format!("(new {}({}))", param.field_type.full_str, param_name);
         }
         gen_values.push(format!("
         Dart_CObject value{};
@@ -409,7 +412,7 @@ fn get_str_callback_method_impl_dart_cobject_type(field_type: &FieldType) -> (St
         TypeKind::String => {
             return ("Dart_CObject_kString".to_string(), "as_string".to_string(), "char*".to_string());
         }
-        TypeKind::Class => {
+        TypeKind::Class | TypeKind::StdPtr | TypeKind::StdVector => {
             return ("Dart_CObject_kInt64".to_string(), "as_int64".to_string(), "int64_t".to_string());
         }
         _ => {
