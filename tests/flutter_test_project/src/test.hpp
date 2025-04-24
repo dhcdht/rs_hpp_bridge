@@ -19,6 +19,8 @@ public:
     virtual ~MyCallback() = default;
     virtual void onCallback(std::string message) = 0;
     virtual void onGetInt(int value) = 0;
+    virtual void onGetStruct(SimpleStruct s)= 0;
+    virtual void onGetVector(std::vector<float> v) = 0;
 };
 
 class TestClass {
@@ -34,13 +36,15 @@ public:
     double sum(int a, float b);
     // Add new methods for testing
     std::string getString(const std::string str);
+    const char* getCharString(const char* str);
+    const unsigned char* getUnsignedCharString(const unsigned char* str);
     SimpleStruct getStruct();
     void processStruct(SimpleStruct s);
     static int getStaticValue(const int value);
     std::vector<int> getVector();
     void processVector(std::vector<int> v);
 
-    int getCount(); // 新增获取 count 的方法
+    uint64_t getCount(); // 新增获取 count 的方法
     void incrementCount(); // 新增增加 count 的方法
     std::string getMessage(); // 新增返回 std::string 的方法
     void modifyIntPtr(int* intPtr); // 重命名参数 ptr 为 intPtr
@@ -50,6 +54,8 @@ public:
     void registerCallback(std::shared_ptr<MyCallback> callback);
     void triggerCallback(std::string message);
     void triggerGetIntCallback(int value);
+    void triggerGetStructCallback(int id, std::string name);
+    void triggetGetVectorCallback(std::vector<float> v);
 
     // // Overload test
     // void processData(int data);

@@ -553,7 +553,7 @@ fn get_str_dart_fun_type(field_type: &FieldType) -> String {
     }
     else if field_type.type_kind == TypeKind::StdVector {
         let value_type = field_type.value_type.as_ref().unwrap();
-        return format!("StdVector_{}", get_str_dart_fun_type(value_type));
+        return format!("StdVector_{}", value_type.type_str);
     }
 
     // 基础数据类型

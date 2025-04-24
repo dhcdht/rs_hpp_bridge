@@ -15,7 +15,7 @@ double TestClass::sum(int a, float b) {
     return a + b;
 }
 
-int TestClass::getCount() {
+uint64_t TestClass::getCount() {
     return count; 
 }
 
@@ -38,6 +38,14 @@ std::string TestClass::getStaticMessage() {
 }
 
 std::string TestClass::getString(const std::string str) {
+    return str;
+}
+
+const char* TestClass::getCharString(const char* str) {
+    return str;
+}
+
+const unsigned char* TestClass::getUnsignedCharString(const unsigned char* str) {
     return str;
 }
 
@@ -86,6 +94,25 @@ void TestClass::triggerGetIntCallback(int value) {
         current_callback->onGetInt(value);
     } else {
         std::cout << "C++: No callback registered for getInt." << std::endl;
+    }
+}
+
+void TestClass::triggerGetStructCallback(int id, std::string name) {
+    if (current_callback) {
+        std::cout << "C++: Triggering onGetStruct callback." << std::endl;
+        SimpleStruct s = { id, name };
+        current_callback->onGetStruct(s);
+    } else {
+        std::cout << "C++: No callback registered for onGetStruct." << std::endl;
+    }
+}
+
+void TestClass::triggetGetVectorCallback(std::vector<float> v) {
+    if (current_callback) {
+        std::cout << "C++: Triggering onGetVector callback." << std::endl;
+        current_callback->onGetVector(v);
+    } else {
+        std::cout << "C++: No callback registered for onGetVector." << std::endl;
     }
 }
 

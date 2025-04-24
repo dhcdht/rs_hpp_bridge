@@ -342,6 +342,9 @@ fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> Strin
         if (param.field_type.type_kind == TypeKind::String) {
             param_name = format!("{}.c_str()", param_name);
         }
+        if (param.field_type.type_kind == TypeKind::Class) && (param.field_type.ptr_level == 0) {
+            param_name = format!("(new {}({}))", param.field_type.type_str, param_name);
+        }
         gen_values.push(format!("
         Dart_CObject value{};
         value{}.type = {};
@@ -384,6 +387,7 @@ fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> Strin
 
 /**
  * Dart_CObject 枚举类型, value.xxx 类型, 从C到Dart类型转换类型
+ * 需要特殊处理的类型，会返回空字符串
  */
 fn get_str_callback_method_impl_dart_cobject_type(field_type: &FieldType) -> (String, String, String) {
     match field_type.type_kind {
@@ -409,7 +413,7 @@ fn get_str_callback_method_impl_dart_cobject_type(field_type: &FieldType) -> (St
             return ("Dart_CObject_kInt64".to_string(), "as_int64".to_string(), "int64_t".to_string());
         }
         _ => {
-            unimplemented!("get_str_callback_method_impl_dart_cobject_type: unknown type kind {:?}", field_type);
+            return ("".to_string(), "".to_string(), "".to_string());
         }
     }
 }

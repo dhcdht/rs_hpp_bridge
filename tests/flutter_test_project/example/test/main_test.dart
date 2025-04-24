@@ -76,6 +76,16 @@ void main() {
       final strResult = t.getString("A string from dart");
       expect(strResult, "A string from dart");
 
+      // test getCharString
+      final charString = "A char string from dart".toNativeUtf8();
+      final charStringResult = t.getCharString(charString.cast());
+      // expect(charStringResult.elementAt(0).toString().codeUnitAt(0), 'A'.codeUnitAt(0));
+
+      // test getUnsignedCharString
+      final unsignedCharString = "A unsigned char string from dart".toNativeUtf8();
+      final unsignedCharStringResult = t.getUnsignedCharString(unsignedCharString.cast());
+      // expect(unsignedCharStringResult.elementAt(0).toString().codeUnitAt(0), 'A'.codeUnitAt(0));
+
       // Test getStruct and processStruct
       final simpleStruct = t.getStruct();
       expect(simpleStruct.get_id(), 101);
@@ -144,6 +154,28 @@ void main() {
       t.triggerGetIntCallback(testInt);
       await Future.delayed(Duration(milliseconds: 100));
       expect(callbackImpl_onGetInt_value, testInt);
+
+      // Trigger the struct callback
+      SimpleStruct? callbackImpl_onGetStruct_value = null;
+      callbackImpl.onGetStruct_block =(s) {
+        callbackImpl_onGetStruct_value = s;
+      };
+      final testStruct = SimpleStruct.Constructor();
+      t.triggerGetStructCallback(10240, "st");
+      await Future.delayed(Duration(milliseconds: 100));
+      expect(callbackImpl_onGetStruct_value?.get_id(), 10240);
+      expect(callbackImpl_onGetStruct_value?.get_name(), "st");
+
+      // Trigger the vector callback
+      StdVector_float? callbackImpl_onGetVector_value = null;
+      callbackImpl.onGetVector_block = (v) {
+        callbackImpl_onGetVector_value = v;
+      };
+      StdVector_float vf = StdVector_float.Constructor();
+      t.triggetGetVectorCallback(vf);
+      await Future.delayed(Duration(milliseconds: 100));
+      expect(callbackImpl_onGetVector_value?.size(), 0);
+
       // We can't directly check the return value received by C++ here,
       // but we verified the Dart method was called and returned the expected value.
       // Check C++ console output for "Got int from callback: 999"

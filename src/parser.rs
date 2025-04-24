@@ -81,6 +81,14 @@ fn handle_clang_ClassDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
             return;
         }
     }
+    // 跳过 std namespace 的类
+    if let Some(semantic_parent) = entity.get_semantic_parent() {
+        if let Some(parent_name) = semantic_parent.get_name() {
+            if parent_name.starts_with("__") {
+                return; // Skip classes in std namespace
+            }
+        }
+    }
     
     let class_name = entity.get_name().unwrap_or_default();
     let mut class = Class::default();
@@ -243,6 +251,16 @@ fn handle_clang_Method(out_hpp_element: &mut HppElement, entity: &clang::Entity<
             // 说明 entity 是一个重载操作符方法，不 bridge 重载函数
             return;
         }
+    }
+    // 跳过回调类的非 virtual 方法
+    match out_hpp_element {
+        HppElement::Class(class) => {
+            if class.class_type == ClassType::Callback && !entity.is_virtual_method() {
+                // Don't bridge non-virtual methods in callback classes
+                return;
+            }
+        },
+        _ => {},
     }
 
     let mut method = Method::default();

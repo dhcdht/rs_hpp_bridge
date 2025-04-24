@@ -407,7 +407,7 @@ impl FieldType {
                 field_type.type_kind = TypeKind::Void;
                 field_type.type_str = "void".to_string();
             }
-            "int" | "int64_t" | "size_t" => {
+            "int" | "int64_t" | "size_t" | "uint64_t" => {
                 field_type.type_kind = TypeKind::Int64;
                 field_type.type_str = "int".to_string();
             }
@@ -422,6 +422,10 @@ impl FieldType {
             "char" => {
                 field_type.type_kind = TypeKind::Char;
                 field_type.type_str = "char".to_string();
+            }
+            "unsigned char" => {
+                field_type.type_kind = TypeKind::Char;
+                field_type.type_str = "unsigned char".to_string();
             }
             "bool" => {
                 field_type.type_kind = TypeKind::Bool;
