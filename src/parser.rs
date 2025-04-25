@@ -2,7 +2,7 @@ use core::str;
 
 use crate::gen_context::*;
 
-pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str) {
+pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str, include_path: &str) {
     let clang = clang::Clang::new().unwrap();
     let index = clang::Index::new(&clang, true, false);
     let translation_unit = index.parser(hpp_path)
@@ -10,6 +10,7 @@ pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str) {
             "-x", "c++", 
             "-isystem", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/",
             "-isystem", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/",
+            "-isystem", include_path,
         ])
         .parse().unwrap();
     let entity = translation_unit.get_entity();
@@ -31,7 +32,7 @@ pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str) {
 #[test]
 fn test_parse_hpp() {
     let mut gen_context = GenContext::default();
-    parse_hpp(&mut gen_context, "./tests/1/test.hpp");
+    parse_hpp(&mut gen_context, "./tests/1/test.hpp", "");
     let result = format!("{:#?}", gen_context);
     let expected = std::fs::read_to_string("./tests/1/ut_result/parse_hpp.txt").unwrap();
     assert_eq!(result, expected);

@@ -56,7 +56,7 @@ fn main() {
     fs::create_dir_all(gen_out_dir);
     for h_file in &h_files {
         let mut gen_context = gen_context::GenContext::default();
-        parser::parse_hpp(&mut gen_context, h_file.as_path().to_str().unwrap());
+        parser::parse_hpp(&mut gen_context, h_file.as_path().to_str().unwrap(), parent.to_str().unwrap());
         // print!("{:#?}", gen_context);
         
         gen_c::gen_c(&gen_context, gen_out_dir);
