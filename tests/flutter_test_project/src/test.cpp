@@ -116,6 +116,15 @@ void TestClass::triggetGetVectorCallback(std::vector<float> v) {
     }
 }
 
+void TestClass::triggerGetConstCallback(const unsigned char* value, size_t size) {
+    if (current_callback) {
+        std::cout << "C++: Triggering onGetConst callback." << std::endl;
+        current_callback->onGetConst(value, size);
+    } else {
+        std::cout << "C++: No callback registered for onGetConst." << std::endl;
+    }
+}
+
 // // Overload implementations
 // void TestClass::processData(int data) {
 //     std::cout << "C++: Processing int data: " << data << std::endl;

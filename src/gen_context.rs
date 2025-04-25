@@ -346,12 +346,12 @@ impl FieldType {
         // println!("clang_type: {:?}, {:?}, {:?}", clang_type, clang_type.unwrap().get_kind(), clang_type.unwrap().get_template_argument_types());
 
         let mut display_name = clang_type.unwrap().get_display_name();
+        let mut field_type = FieldType::default();
+        field_type.full_str = display_name.clone();
         // 去掉修饰符
         display_name = display_name.replace("const ", "");
 
-        let mut field_type = FieldType::default();
-        field_type.full_str = display_name.clone();
-        let mut lower_full_str = field_type.full_str.to_lowercase();
+        let mut lower_full_str = display_name.to_lowercase();
         // enum
         if let Some(elaborated) = clang_type.unwrap().get_elaborated_type() {
             if elaborated.get_kind() == clang::TypeKind::Enum {

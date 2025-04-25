@@ -369,6 +369,10 @@ fn get_str_port_fun_params_impl(class: Option<&Class>, method: &Method) -> Strin
         {
             param_strs.push(format!("{}.FromNative(Pointer<Void>.fromAddress(args[{}]))", get_str_dart_fun_type(&param.field_type), index));
         }
+        else if param.field_type.type_kind == TypeKind::Char 
+        {
+            param_strs.push(format!{"(args[{}] as String).toNativeUtf8().cast()", index});
+        }
         else {
             param_strs.push(format!("args[{}]", index));
         }

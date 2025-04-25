@@ -176,6 +176,21 @@ void main() {
       await Future.delayed(Duration(milliseconds: 100));
       expect(callbackImpl_onGetVector_value?.size(), 0);
 
+      // Trigger the const callback
+      Pointer<Int8>? callbackImpl_onGetConst_value = null;
+      int callbackImpl_onGetConst_size = 0;
+      callbackImpl.onGetConst_block = (v, size) {
+        callbackImpl_onGetConst_value = v;
+        callbackImpl_onGetConst_size = size;
+      };
+      final testConst = "A const cahr from dart";
+      final testConstLength = testConst.toNativeUtf8().length;
+      t.triggerGetConstCallback(testConst.toNativeUtf8().cast(), testConstLength);
+      await Future.delayed(Duration(milliseconds: 100));
+      expect(callbackImpl_onGetConst_value?.elementAt(0).value, 'A'.codeUnitAt(0));
+      expect(callbackImpl_onGetConst_value?.elementAt(testConstLength-1).value, 't'.codeUnitAt(0));
+      expect(callbackImpl_onGetConst_size, testConst.toNativeUtf8().length);
+
       // We can't directly check the return value received by C++ here,
       // but we verified the Dart method was called and returned the expected value.
       // Check C++ console output for "Got int from callback: 999"

@@ -404,7 +404,7 @@ fn get_str_callback_method_impl_dart_cobject_type(field_type: &FieldType) -> (St
             return ("Dart_CObject_kDouble".to_string(), "as_double".to_string(), "double".to_string());
         }
         TypeKind::Char => {
-            return ("Dart_CObject_kInt32".to_string(), "as_int32".to_string(), "int32_t".to_string());
+            return ("Dart_CObject_kString".to_string(), "as_string".to_string(), "char*".to_string());
         }
         TypeKind::Bool => {
             return ("Dart_CObject_kBool".to_string(), "as_bool".to_string(), "bool".to_string());

@@ -21,6 +21,7 @@ public:
     virtual void onGetInt(int value) = 0;
     virtual void onGetStruct(SimpleStruct s)= 0;
     virtual void onGetVector(std::vector<float> v) = 0;
+    virtual void onGetConst(const unsigned char* value, size_t size) = 0;
 };
 
 class TestClass {
@@ -56,6 +57,7 @@ public:
     void triggerGetIntCallback(int value);
     void triggerGetStructCallback(int id, std::string name);
     void triggetGetVectorCallback(std::vector<float> v);
+    void triggerGetConstCallback(const unsigned char* value, size_t size);
 
     // // Overload test
     // void processData(int data);
