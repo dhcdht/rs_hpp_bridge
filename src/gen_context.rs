@@ -2,6 +2,7 @@ use core::fmt;
 
 #[derive(Debug, Default)]
 pub struct GenContext {
+    pub module_name: String,
     pub hpp_elements: Vec<HppElement>,
 }
 

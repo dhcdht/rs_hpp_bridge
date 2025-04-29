@@ -8,7 +8,7 @@ cd "$PROJECT_ROOT"
 cargo build
 
 # 生成 bridge
-./target/debug/rs_hpp_bridge -i tests/flutter_test_project/src/test.i -o tests/flutter_test_project/output/
+./target/debug/rs_hpp_bridge -i tests/flutter_test_project/src/TestModule.i -o tests/flutter_test_project/output/
 
 # 测试项目目录
 cd "$SCRIPT_DIR"

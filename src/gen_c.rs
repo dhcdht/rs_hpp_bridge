@@ -40,6 +40,8 @@ fn gen_c_file(gen_context: &GenContext, file: &File, gen_out_dir: &str) {
     let mut ch_header = format!("
 #include <stdio.h>
 
+#define API_EXPORT __attribute__((visibility(\"default\"))) __attribute__((used))
+
 extern \"C\" {{
 ");
     // 收集所有需要生成 typedef 的类型名
@@ -251,9 +253,9 @@ fn get_str_field_decl(class: Option<&Class>, field: &Field) -> (String, String) 
     let ffi_class_name = format!("FFI_{}", class.unwrap().type_str);
     let cur_class_name = class.get_class_name_or_empty();
 
-    let get_decl = format!("{} ffi_{}_get_{}({} obj);", 
+    let get_decl = format!("API_EXPORT {} ffi_{}_get_{}({} obj);", 
         get_str_ffi_type(&field.field_type), cur_class_name, field.name, ffi_class_name);
-    let set_decl = format!("void ffi_{}_set_{}({} obj, {} {});", 
+    let set_decl = format!("API_EXPORT void ffi_{}_set_{}({} obj, {} {});", 
         cur_class_name, field.name, ffi_class_name, get_str_ffi_type(&field.field_type), field.name);
 
     return (get_decl, set_decl);
@@ -496,7 +498,7 @@ fn get_str_callback_method_regist(class: Option<&Class>, method: &Method) -> (St
     // 1. 函数指针类型声明
     // 2. 注册函数指针的函数声明
     let regist_decl = format!("typedef {} (*{})({});
-void {}_regist(int64_t {});
+API_EXPORT void {}_regist(int64_t {});
 ",
         get_str_ffi_type(&method.return_type), fun_ptr_type_str, params_decl_str,
         fun_ptr_type_str, method.name
@@ -507,7 +509,7 @@ void {}_regist(int64_t {});
     let regist_var_decl = format!("static int64_t {} = 0;\n", fun_ptr_var_str);
 
     // .cpp中的注册函数实现
-    let regist_impl = format!("void {}_regist(int64_t {}){{
+    let regist_impl = format!("API_EXPORT void {}_regist(int64_t {}){{
     {} = {};
 }};
 ", 
@@ -553,7 +555,7 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
 fn get_str_method_decl(class: Option<&Class>, method: &Method) -> String {
     let ffi_decl_name = get_str_ffi_decl_class_name(class, method);
     let params = get_str_params_decl(class, method);
-    let method_decl = format!("{} {}({});", 
+    let method_decl = format!("API_EXPORT {} {}({});", 
         get_str_ffi_type(&method.return_type), ffi_decl_name, params);
 
     return method_decl;

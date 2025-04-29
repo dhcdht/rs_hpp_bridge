@@ -3,6 +3,8 @@ use std::{fs, io::Write, path::{Path, PathBuf}};
 use crate::{gen_c, gen_context::*};
 
 pub fn gen_dart(gen_context: &GenContext, gen_out_dir: &str) {
+    gen_dart_public(gen_context, gen_out_dir);
+
     for hpp_element in &gen_context.hpp_elements {
         gen_dart_api(gen_context, hpp_element, gen_out_dir, None);
         gen_dart_fun(gen_context, hpp_element, gen_out_dir, None);
@@ -13,6 +15,32 @@ pub fn gen_dart(gen_context: &GenContext, gen_out_dir: &str) {
 struct DartGenContext<'a> {
     pub cur_file: Option<fs::File>,
     pub cur_class: Option<&'a Class>,
+}
+
+fn gen_dart_public<'a>(gen_context: &GenContext, gen_out_dir: &str) {
+    let public_file_name = format!("{}_public.dart", gen_context.module_name);
+    let public_file_path = PathBuf::new().join(gen_out_dir).join(public_file_name.clone()).into_os_string().into_string().unwrap();
+    let public_file_str = format!("
+import 'dart:ffi';
+import 'dart:io';
+import 'package:ffi/ffi.dart';
+
+late final DynamicLibrary {}_dylib;
+void {}_setDylib(DynamicLibrary dylib) {{
+    {}_dylib = dylib;
+    return;
+}}
+
+late final ptr_ffi_Dart_InitializeApiDL = {}_dylib.lookup<NativeFunction<Int64 Function(Pointer<Void>)>>('Dart_InitializeApiDL');
+late final ffi_Dart_InitializeApiDL = ptr_ffi_Dart_InitializeApiDL.asFunction<int Function(Pointer<Void>)>();
+    ", gen_context.module_name,
+    gen_context.module_name,
+    gen_context.module_name,
+    gen_context.module_name,
+    );
+
+    let mut public_file = fs::File::create(public_file_path).unwrap();
+    public_file.write_all(public_file_str.as_bytes());
 }
 
 fn gen_dart_fun<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_out_dir: &str, dart_gen_context: Option<&mut DartGenContext<'a>>) {
@@ -137,21 +165,14 @@ fn gen_dart_api<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_o
             let dart_ffiapi_path = PathBuf::new().join(gen_out_dir).join(dart_ffiapi_filename.clone()).into_os_string().into_string().unwrap();
             let mut ffiapi_file = fs::File::create(dart_ffiapi_path).unwrap();
 
+            let public_file_name = format!("{}_public.dart", gen_context.module_name);
             // 公共头
             let mut file_header = format!("
 import 'dart:ffi';
 import 'dart:io';
 import 'package:ffi/ffi.dart';
-            \n");
-            file_header.push_str(&format!("
-late final DynamicLibrary _dylib;
-void {}_setDylib(DynamicLibrary dylib) {{
-  _dylib = dylib;
-  return;
-}}
-late final ptr_ffi_Dart_InitializeApiDL = _dylib.lookup<NativeFunction<Int64 Function(Pointer<Void>)>>('Dart_InitializeApiDL');
-late final ffi_Dart_InitializeApiDL = ptr_ffi_Dart_InitializeApiDL.asFunction<int Function(Pointer<Void>)>();
-            \n", filename_without_ext));
+import '{}';
+            \n", public_file_name);
             ffiapi_file.write(file_header.as_bytes());
 
             ffiapi_gen_context.cur_file = Some(ffiapi_file);
@@ -174,11 +195,11 @@ late final ffi_Dart_InitializeApiDL = ptr_ffi_Dart_InitializeApiDL.asFunction<in
 
             if local_ffiapi_gen_context.cur_class.is_some() && local_ffiapi_gen_context.cur_class.unwrap().is_callback() {
                 // 对于回调类，需要特殊生成注册函数
-                let dart_api_str = get_str_dart_api_for_regist_callback(local_ffiapi_gen_context.cur_class, method);
+                let dart_api_str = get_str_dart_api_for_regist_callback(gen_context, local_ffiapi_gen_context.cur_class, method);
                 ffiapi_file.write(format!("{}", dart_api_str).as_bytes());
             }
 
-            let dart_api_str = get_str_dart_api(local_ffiapi_gen_context.cur_class, method);
+            let dart_api_str = get_str_dart_api(gen_context, local_ffiapi_gen_context.cur_class, method);
             ffiapi_file.write(format!("{}\n", dart_api_str).as_bytes());
         }
         HppElement::Field(field) => {
@@ -187,10 +208,10 @@ late final ffi_Dart_InitializeApiDL = ptr_ffi_Dart_InitializeApiDL.asFunction<in
 
             // get
             let get_method = Method::new_get_for_field(field);
-            let get_method_str = get_str_dart_api(local_ffiapi_gen_context.cur_class, &get_method);
+            let get_method_str = get_str_dart_api(gen_context, local_ffiapi_gen_context.cur_class, &get_method);
             // set
             let set_method = Method::new_set_for_field(field);
-            let set_method_str = get_str_dart_api(local_ffiapi_gen_context.cur_class, &set_method);
+            let set_method_str = get_str_dart_api(gen_context, local_ffiapi_gen_context.cur_class, &set_method);
             ffiapi_file.write(format!("{}\n{}\n", get_method_str, set_method_str).as_bytes());
         }
         _ => {
@@ -573,7 +594,7 @@ fn get_str_dart_fun_type(field_type: &FieldType) -> String {
     return get_str_native_api_type(field_type);
 }
 
-fn get_str_dart_api(class: Option<&Class>, method: &Method) -> String {
+fn get_str_dart_api(gen_context: &GenContext, class: Option<&Class>, method: &Method) -> String {
     // 独立函数和类的函数，都走下边逻辑，需要注意区分
     let mut cur_class_name = "";
     if let Some(cur_class) = class {
@@ -583,16 +604,16 @@ fn get_str_dart_api(class: Option<&Class>, method: &Method) -> String {
     let native_api_params_str = get_str_native_api_params_decl(class, method);
     let dart_api_params_str = get_str_dart_api_params_decl(class, method);
 
-    let dar_api_str = format!("late final ptr_{} = _dylib.lookup<NativeFunction<{} Function({})>>('{}');
+    let dar_api_str = format!("late final ptr_{} = {}_dylib.lookup<NativeFunction<{} Function({})>>('{}');
 late final {} = ptr_{}.asFunction<{} Function({})>();
 ",
-        ffiapi_c_method_name, get_str_native_api_type(&method.return_type), native_api_params_str, ffiapi_c_method_name,
+        ffiapi_c_method_name, gen_context.module_name, get_str_native_api_type(&method.return_type), native_api_params_str, ffiapi_c_method_name,
         ffiapi_c_method_name, ffiapi_c_method_name, get_str_dart_api_type(&method.return_type), dart_api_params_str,
     );
     return dar_api_str;
 }
 
-fn get_str_dart_api_for_regist_callback(class: Option<&Class>, method: &Method) -> String {
+fn get_str_dart_api_for_regist_callback(gen_context: &GenContext, class: Option<&Class>, method: &Method) -> String {
     if method.method_type != MethodType::Normal {
         return "".to_string();
     }
@@ -610,11 +631,11 @@ fn get_str_dart_api_for_regist_callback(class: Option<&Class>, method: &Method) 
     let params_str = get_str_native_api_params_decl(class, method);
 
     let dart_api_str = format!("typedef {} = {} Function({});
-late final ptr_{} = _dylib.lookup<NativeFunction<Void Function(Int64)>>('{}');
+late final ptr_{} = {}_dylib.lookup<NativeFunction<Void Function(Int64)>>('{}');
 late final {} = ptr_{}.asFunction<void Function(int)>();
 ", 
         native_fun_type_name, get_str_native_api_type(&method.return_type), params_str,
-        native_regist_fun_name, native_regist_fun_name,
+        native_regist_fun_name, gen_context.module_name, native_regist_fun_name,
         native_regist_fun_name, native_regist_fun_name,
     );
 

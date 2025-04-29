@@ -56,6 +56,12 @@ fn main() {
     fs::create_dir_all(gen_out_dir);
     for h_file in &h_files {
         let mut gen_context = gen_context::GenContext::default();
+        let input_filename = input_path.file_name().unwrap().to_str().unwrap();
+        let module_name = match input_filename.rfind(".") {
+            Some(idx) => &input_filename[..idx],
+            None => &input_filename,
+        };
+        gen_context.module_name = module_name.to_string();
         parser::parse_hpp(&mut gen_context, h_file.as_path().to_str().unwrap(), parent.to_str().unwrap());
         // print!("{:#?}", gen_context);
         

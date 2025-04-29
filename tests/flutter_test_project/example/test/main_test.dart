@@ -6,6 +6,7 @@ import 'package:flutter_test_project/flutter_test_project.dart';
 import 'package:flutter_test_project/test.dart';
 import 'package:flutter_test_project/test_ffiapi.dart';
 import 'package:ffi/ffi.dart'; // Import ffi for Utf8 and allocation
+import 'package:flutter_test_project/TestModule_public.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -13,7 +14,7 @@ void main() {
 
   setUpAll(() async {
     // Initialize FFI
-    test_setDylib(flt_dylib);
+    TestModule_setDylib(flt_dylib);
     // Create a single instance for all tests in this group if needed, or create per test
   });
 
