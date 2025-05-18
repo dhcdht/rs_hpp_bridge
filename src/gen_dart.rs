@@ -85,6 +85,19 @@ class {} implements Finalizable {{
         return _nativePtr;
     }}
     static final _finalizer = NativeFinalizer(ptr_ffi_{}_Destructor);
+
+    /**
+     * dart对象释放时，释放native对象，默认行为
+     */
+    void nativeLifecycleLink() {{
+        _finalizer.attach(this, _nativePtr, detach: this);
+    }}
+    /**
+     * dart对象释放时，不释放native对象
+     */
+    void nativeLifecycleUnlink() {{
+        _finalizer.detach(this);
+    }}
 ", 
             class.comment_str.as_ref().unwrap_or(&"".to_string()),
             class.type_str, class.type_str);
@@ -317,7 +330,12 @@ fn get_str_dart_fun_body(class: Option<&Class>, method: &Method) -> String {
         MethodType::Constructor => {
             body_prefix.push_str(&format!("_nativePtr = {}(", ffiapi_c_method_name));
             body_suffix.push_str(");
-        _finalizer.attach(this, _nativePtr);");
+        nativeLifecycleLink();");
+            if (class.unwrap().class_type == ClassType::StdPtr) {
+                body_suffix.push_str("
+        // stdptr 会接管 obj 对象的生命周期，所以这里不需要 obj 对象再跟 native 对象绑定了
+        obj.nativeLifecycleUnlink();");
+            }
         }
         MethodType::Destructor => {
             body_prefix.push_str(&format!("return {}(", ffiapi_c_method_name));
