@@ -41,6 +41,8 @@ pub struct Class {
     pub value_type: Option<Box<FieldType>>,
     /// 注释
     pub comment_str: Option<String>,
+    /// 源文件位置
+    pub souce_file_path: String,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]

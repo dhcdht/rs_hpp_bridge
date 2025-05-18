@@ -77,6 +77,16 @@ fn handle_clang_ClassDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
     if !entity.is_definition() {
         return;
     }
+    match out_hpp_element {
+        HppElement::File(file) => {
+            // 定义不是在当前文件，而是被 inlcude 时，不在这个文件中处理它的桥接生成
+            if file.path != entity.get_location().unwrap().get_presumed_location().0 {
+                return;
+            }
+        }
+        _ => {
+        }
+    }
     if let Some(access) = entity.get_accessibility() {
         if (access != clang::Accessibility::Public) {
             return;
@@ -112,6 +122,7 @@ fn handle_clang_ClassDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
         }
     }
     class.comment_str = entity.get_comment();
+    class.souce_file_path = entity.get_location().unwrap().get_presumed_location().0;
     let mut element = HppElement::Class(class);
     for child in entity.get_children() {
         visit_parse_clang_entity(&mut element, &child, indent + 1);

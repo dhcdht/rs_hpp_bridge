@@ -46,8 +46,6 @@ extern \"C\" {{
 ");
     // 收集所有需要生成 typedef 的类型名
     let mut typedef_names = vec![];
-    // 收集所有被引用的 StdPtr 类型
-    let mut stdptr_types = vec![];
 
     // 1. 首先收集文件中定义的类
     for element in &file.children {
@@ -63,16 +61,11 @@ extern \"C\" {{
     }
 
     // 2. 然后收集所有方法中引用的类型
-    collect_referenced_types(file, &mut typedef_names, &mut stdptr_types);
+    collect_referenced_types(file, &mut typedef_names);
 
     // 3. 为所有收集到的类型生成 typedef
     for typedef_name in &typedef_names {
         ch_header.push_str(&format!("typedef void* FFI_{};\n", typedef_name));
-    }
-
-    // 4. 为所有收集到的 StdPtr 类型生成 typedef
-    for stdptr_type in &stdptr_types {
-        ch_header.push_str(&format!("typedef void* FFI_StdPtr_{};\n", stdptr_type));
     }
 
     ch_str.push_str(&ch_header);
@@ -772,43 +765,45 @@ fn get_str_ffi_to_cpp_param_field(field_type: &FieldType, param_name: &str) -> S
 }
 
 /// 收集所有在方法参数和返回值中被引用的类型
-fn collect_referenced_types(file: &File, typedef_names: &mut Vec<String>, stdptr_types: &mut Vec<String>) {
+fn collect_referenced_types(file: &File, typedef_names: &mut Vec<String>) {
     // 递归收集文件中所有元素引用的类型
-    collect_element_referenced_types(file.children.first().unwrap(), typedef_names, stdptr_types);
+    for child in &file.children {
+        collect_element_referenced_types(&child, typedef_names);
+    }
 }
 
 /// 递归处理HppElement，收集其中引用的所有类型
-fn collect_element_referenced_types(element: &HppElement, typedef_names: &mut Vec<String>, stdptr_types: &mut Vec<String>) {
+fn collect_element_referenced_types(element: &HppElement, typedef_names: &mut Vec<String>) {
     match element {
         HppElement::File(file) => {
             for child in &file.children {
-                collect_element_referenced_types(child, typedef_names, stdptr_types);
+                collect_element_referenced_types(child, typedef_names);
             }
         },
         HppElement::Class(class) => {
             // 收集类中所有子元素引用的类型
             for child in &class.children {
-                collect_element_referenced_types(child, typedef_names, stdptr_types);
+                collect_element_referenced_types(child, typedef_names);
             }
         },
         HppElement::Method(method) => {
             // 处理返回类型
-            collect_field_type(&method.return_type, typedef_names, stdptr_types);
+            collect_field_type(&method.return_type, typedef_names);
             
             // 处理参数类型
             for param in &method.params {
-                collect_field_type(&param.field_type, typedef_names, stdptr_types);
+                collect_field_type(&param.field_type, typedef_names);
             }
         },
         HppElement::Field(field) => {
             // 处理字段类型
-            collect_field_type(&field.field_type, typedef_names, stdptr_types);
+            collect_field_type(&field.field_type, typedef_names);
         }
     }
 }
 
 /// 处理单个字段类型，收集需要的typedef
-fn collect_field_type(field_type: &FieldType, typedef_names: &mut Vec<String>, stdptr_types: &mut Vec<String>) {
+fn collect_field_type(field_type: &FieldType, typedef_names: &mut Vec<String>) {
     match field_type.type_kind {
         TypeKind::Class => {
             // 添加类类型
@@ -821,18 +816,18 @@ fn collect_field_type(field_type: &FieldType, typedef_names: &mut Vec<String>, s
             if !typedef_names.contains(&field_type.type_str) {
                 typedef_names.push(field_type.type_str.clone());
             }
-            // 添加StdPtr类型本身
-            if !stdptr_types.contains(&field_type.type_str) {
-                stdptr_types.push(field_type.type_str.clone());
+            let stdptr_typename = format!("StdPtr_{}", field_type.type_str);
+            if !typedef_names.contains(&stdptr_typename) {
+                typedef_names.push(stdptr_typename);
             }
         },
         TypeKind::StdVector => {
             // 处理vector内部的值类型
             if let Some(value_type) = &field_type.value_type {
-                collect_field_type(value_type, typedef_names, stdptr_types);
+                collect_field_type(value_type, typedef_names);
                 
                 // 添加StdVector类型本身
-                let vector_type_str = format!("StdVector_{}", value_type.get_value_type_str());
+                let vector_type_str = format!("StdVector_{}", field_type.get_value_type_str());
                 if !typedef_names.contains(&vector_type_str) {
                     typedef_names.push(vector_type_str);
                 }
