@@ -270,6 +270,18 @@ fn handle_clang_Method(out_hpp_element: &mut HppElement, entity: &clang::Entity<
     method.comment_str = entity.get_comment();
     // 检查是否为静态方法
     method.is_static = entity.is_static_method();
+
+    // todo: dhcdht 跳过 callback 中有返回值的方法，这种情况在 dart 中无法处理
+    match out_hpp_element {
+        HppElement::Class(class) => {
+            if class.class_type == ClassType::Callback && method.return_type.type_kind != TypeKind::Void {
+                println!("dart 中不支持 callback 中有返回值的方法，所以跳过这个方法: {}", method.name);
+                return;
+            }
+        },
+        _ => {},
+    }
+
     let mut element = HppElement::Method(method);
     for child in entity.get_children() {
         visit_parse_clang_entity(&mut element, &child, indent + 1);
