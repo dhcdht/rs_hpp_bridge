@@ -74,6 +74,7 @@ extern \"C\" {{
 #include \"{}\"
 #include \"{}\"
 #include \"dart_api_dl.h\"
+#include <set>
 
 extern \"C\" {{
 
@@ -386,7 +387,9 @@ fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> Strin
         args.type = Dart_CObject_kArray;
         args.value.as_array.length = {};
         args.value.as_array.values = values;
-        Dart_PostCObject_DL((Dart_Port_DL){}, &args);
+        for (const auto& item : {}) {{
+            Dart_PostCObject_DL((Dart_Port_DL)item, &args);
+        }}
 }};
 ",
         method.return_type.full_str, method.name, decl_params_str,
@@ -499,11 +502,11 @@ API_EXPORT void {}_regist(int64_t {});
 
     // .cpp中的函数指针变量定义
     // 1. 注册函数指针的实现
-    let regist_var_decl = format!("static int64_t {} = 0;\n", fun_ptr_var_str);
+    let regist_var_decl = format!("static std::set<int64_t> {} = {{}};\n", fun_ptr_var_str);
 
     // .cpp中的注册函数实现
     let regist_impl = format!("API_EXPORT void {}_regist(int64_t {}){{
-    {} = {};
+    {}.insert({});
 }};
 ", 
     fun_ptr_type_str, method.name, 

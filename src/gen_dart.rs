@@ -446,7 +446,7 @@ fn get_str_dart_fun_body_for_callback(class: Option<&Class>, method: &Method) ->
         MethodType::Constructor => {
             body_prefix.push_str(&format!("_nativePtr = {}(", ffiapi_c_method_name));
             body_suffix.push_str(&format!(");
-        _finalizer.attach(this, _nativePtr);
+        nativeLifecycleLink();
         nativeToObjMap[_nativePtr] = WeakReference<{}>(this);
         _{}_init();", cur_class_name, cur_class_name));
         }
