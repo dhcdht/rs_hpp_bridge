@@ -19,7 +19,6 @@ A new Flutter FFI plugin project.
   # `../src/*` so that the C sources can be shared among all target platforms.
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
-  s.public_header_files = '../src/test.hpp'
 
   # If your plugin requires a privacy manifest, for example if it collects user
   # data, update the PrivacyInfo.xcprivacy file to describe your plugin's
@@ -32,7 +31,7 @@ A new Flutter FFI plugin project.
   s.platform = :osx, '10.11'
   s.pod_target_xcconfig = { 
     'DEFINES_MODULE' => 'YES',
-    'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/../src/dart_sdk_include" $(inherited)',
+    'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/../src/dart_sdk_include" "$(PODS_TARGET_SRCROOT)/../src" "$(PODS_TARGET_SRCROOT)/../src/output" $(inherited)',
   }
   s.swift_version = '5.0'
 end

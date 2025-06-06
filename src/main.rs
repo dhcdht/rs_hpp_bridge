@@ -54,18 +54,25 @@ fn main() {
     let gen_out_dir = &args.outdir;
     fs::remove_dir_all(gen_out_dir);
     fs::create_dir_all(gen_out_dir);
+    
+    // 创建全局的gen_context，用于管理所有头文件的符号表
+    let mut gen_context = gen_context::GenContext::default();
+    let input_filename = input_path.file_name().unwrap().to_str().unwrap();
+    let module_name = match input_filename.rfind(".") {
+        Some(idx) => &input_filename[..idx],
+        None => &input_filename,
+    };
+    gen_context.module_name = module_name.to_string();
+    
+    // 第一阶段：解析所有头文件，构建完整的符号表
     for h_file in &h_files {
-        let mut gen_context = gen_context::GenContext::default();
-        let input_filename = input_path.file_name().unwrap().to_str().unwrap();
-        let module_name = match input_filename.rfind(".") {
-            Some(idx) => &input_filename[..idx],
-            None => &input_filename,
-        };
-        gen_context.module_name = module_name.to_string();
+        println!("Parsing header file: {:?}", h_file);
         parser::parse_hpp(&mut gen_context, h_file.as_path().to_str().unwrap(), parent.to_str().unwrap());
-        // print!("{:#?}", gen_context);
-        
-        gen_c::gen_c(&gen_context, gen_out_dir);
-        gen_dart::gen_dart(&gen_context, gen_out_dir);
     }
+    
+    // 第二阶段：统一生成代码（现在gen_context包含了所有文件的信息）
+    println!("Generating C bindings...");
+    gen_c::gen_c(&gen_context, gen_out_dir);
+    println!("Generating Dart bindings...");
+    gen_dart::gen_dart(&gen_context, gen_out_dir);
 }

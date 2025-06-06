@@ -58,13 +58,35 @@ fn gen_dart_fun<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_o
             let dart_path = PathBuf::new().join(gen_out_dir).join(dart_filename.clone()).into_os_string().into_string().unwrap();
             let mut dart_file = fs::File::create(dart_path).unwrap();
 
+            // 收集当前文件中所有引用的外部类型
+            let mut referenced_types = Vec::new();
+            collect_referenced_types_from_file(file, &mut referenced_types);
+            
+            // 生成导入语句，使用 HashSet 去重
+            let mut import_set = std::collections::HashSet::new();
+            for type_name in &referenced_types {
+                // 为每个引用的类型生成对应的import语句
+                // 需要检查类型来源于哪个文件，这里做简化处理
+                if let Some(import_file) = find_type_source_file(gen_context, type_name, filename_without_ext) {
+                    import_set.insert(format!("import '{}.dart';", import_file));
+                }
+            }
+            
+            // 将去重后的 import 语句排序并拼接
+            let mut import_statements = String::new();
+            let mut sorted_imports: Vec<_> = import_set.into_iter().collect();
+            sorted_imports.sort();
+            for import_stmt in sorted_imports {
+                import_statements.push_str(&format!("{}\n", import_stmt));
+            }
+
             // 公共头
             let file_header = format!("
 import '{}';
 import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 import 'dart:isolate';
-            \n", dart_ffiapi_filename);
+{}            \n", dart_ffiapi_filename, import_statements);
             dart_file.write(file_header.as_bytes());
 
             dart_gen_context.cur_file = Some(dart_file);
@@ -588,7 +610,21 @@ fn get_str_dart_fun_params_impl_for_regist_callback(class: Option<&Class>, metho
 fn get_str_dart_fun_type(field_type: &FieldType) -> String {
     // class类型，需要对应 dart class
     if field_type.type_kind == TypeKind::Class {
-        return field_type.type_str.clone();
+        // 清理C++语法，移除const、&、*等修饰符
+        let clean_type = field_type.type_str
+            .replace("const ", "")
+            .replace("const&", "")
+            .replace("&", "")
+            .replace("*", "")
+            .replace(" ", "")
+            .replace("::", "");
+        
+        // Special handling for string types that might be misclassified as Class
+        if clean_type == "stdstring" || clean_type == "string" {
+            return "String".to_string();
+        }
+        
+        return clean_type;
     }
     // 智能指针类型，需要对应 dart class
     else if field_type.type_kind == TypeKind::StdPtr {
@@ -829,4 +865,144 @@ fn get_str_native_api_type(field_type: &FieldType) -> String {
         native_type = format!("Pointer<{}>", native_type);
     }
     return native_type
+}
+
+/// 收集文件中所有引用的外部类型
+fn collect_referenced_types_from_file(file: &File, referenced_types: &mut Vec<String>) {
+    for child in &file.children {
+        collect_referenced_types_from_element(child, referenced_types);
+    }
+}
+
+/// 递归收集元素中引用的类型
+fn collect_referenced_types_from_element(element: &HppElement, referenced_types: &mut Vec<String>) {
+    match element {
+        HppElement::Class(class) => {
+            for child in &class.children {
+                collect_referenced_types_from_element(child, referenced_types);
+            }
+        },
+        HppElement::Method(method) => {
+            // 收集返回类型
+            collect_referenced_types_from_field_type(&method.return_type, referenced_types);
+            // 收集参数类型
+            for param in &method.params {
+                collect_referenced_types_from_field_type(&param.field_type, referenced_types);
+            }
+        },
+        HppElement::Field(field) => {
+            collect_referenced_types_from_field_type(&field.field_type, referenced_types);
+        },
+        _ => {}
+    }
+}
+
+/// 从字段类型中收集引用的类型
+fn collect_referenced_types_from_field_type(field_type: &FieldType, referenced_types: &mut Vec<String>) {
+    match field_type.type_kind {
+        TypeKind::Class => {
+            let clean_type = field_type.type_str
+                .replace("const ", "")
+                .replace("const&", "")
+                .replace("&", "")
+                .replace("*", "")
+                .replace(" ", "")
+                .replace("::", "");
+            
+            // 排除string类型和基本类型
+            if clean_type != "stdstring" && clean_type != "string" && clean_type != "" && !referenced_types.contains(&clean_type) {
+                referenced_types.push(clean_type);
+            }
+        },
+        TypeKind::StdPtr => {
+            let ptr_type = format!("StdPtr_{}", field_type.type_str);
+            if !referenced_types.contains(&ptr_type) {
+                referenced_types.push(ptr_type);
+            }
+            // 也收集基础类型
+            if !referenced_types.contains(&field_type.type_str) {
+                referenced_types.push(field_type.type_str.clone());
+            }
+        },
+        TypeKind::StdVector => {
+            if let Some(value_type) = &field_type.value_type {
+                let vector_type = format!("StdVector_{}", value_type.type_str);
+                if !referenced_types.contains(&vector_type) {
+                    referenced_types.push(vector_type);
+                }
+                // 递归收集值类型
+                collect_referenced_types_from_field_type(value_type, referenced_types);
+            }
+        },
+        _ => {} // 基本类型不需要处理
+    }
+}
+
+/// 查找类型定义在哪个源文件中
+fn find_type_source_file(gen_context: &GenContext, type_name: &str, current_file: &str) -> Option<String> {
+    for hpp_element in &gen_context.hpp_elements {
+        if let HppElement::File(file) = hpp_element {
+            let file_path = Path::new(&file.path);
+            let file_stem = file_path.file_stem()?.to_str()?;
+            
+            // 如果是当前文件，跳过
+            if file_stem == current_file {
+                continue;
+            }
+            
+            // 检查文件中是否定义了这个类型
+            if file_contains_type(file, type_name) {
+                return Some(file_stem.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// 检查文件中是否包含指定类型的定义
+fn file_contains_type(file: &File, type_name: &str) -> bool {
+    for child in &file.children {
+        if element_contains_type(child, type_name) {
+            return true;
+        }
+    }
+    false
+}
+
+/// 检查元素中是否包含指定类型的定义
+fn element_contains_type(element: &HppElement, type_name: &str) -> bool {
+    match element {
+        HppElement::Class(class) => {
+            // 检查类名是否匹配
+            if class.type_str == type_name {
+                return true;
+            }
+            // 检查StdPtr和StdVector生成的类型
+            if type_name.starts_with("StdPtr_") && format!("StdPtr_{}", class.type_str) == type_name {
+                return true;
+            }
+            if type_name.starts_with("StdVector_") && format!("StdVector_{}", class.type_str) == type_name {
+                return true;
+            }
+            // 递归检查子元素
+            for child in &class.children {
+                if element_contains_type(child, type_name) {
+                    return true;
+                }
+            }
+        },
+        HppElement::Field(_) | HppElement::Method(_) => {
+            // 字段和方法不定义类型，只引用类型
+            return false;
+        },
+        HppElement::File(file) => {
+            // 递归检查文件中的子元素
+            for child in &file.children {
+                if element_contains_type(child, type_name) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }

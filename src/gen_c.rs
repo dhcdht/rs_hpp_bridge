@@ -3,12 +3,15 @@ use std::{fs, io::Write, path::{Path, PathBuf}};
 use crate::gen_context::*;
 
 pub fn gen_c(gen_context: &GenContext, gen_out_dir: &str) {
-    match gen_context.hpp_elements.first().unwrap() {
-        HppElement::File(file) => {
-            gen_c_file(gen_context, file, gen_out_dir);
-        }
-        _ => {
-            unimplemented!("gen_c: first element is not File");
+    // 为每个文件生成对应的 FFI 文件
+    for element in &gen_context.hpp_elements {
+        match element {
+            HppElement::File(file) => {
+                gen_c_file(gen_context, file, gen_out_dir);
+            }
+            _ => {
+                // 跳过非文件元素
+            }
         }
     }
 }
@@ -529,10 +532,26 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
             return "const char*".to_string();
         }
         TypeKind::Class => {
-            return format!("FFI_{}", field_type.type_str);
+            // 清理类型名，移除const、&、*等修饰符
+            let cleaned = field_type.type_str
+                .replace("const ", "")
+                .replace("const&", "")
+                .replace("&", "")
+                .replace("*", "")
+                .replace(" ", "");
+            let clean_type_str = cleaned.trim();
+            return format!("FFI_{}", clean_type_str);
         }
         TypeKind::StdPtr => {
-            return format!("FFI_StdPtr_{}", field_type.type_str);
+            // 清理类型名
+            let cleaned = field_type.type_str
+                .replace("const ", "")
+                .replace("const&", "")
+                .replace("&", "")
+                .replace("*", "")
+                .replace(" ", "");
+            let clean_type_str = cleaned.trim();
+            return format!("FFI_StdPtr_{}", clean_type_str);
         }
         TypeKind::StdVector => {
             let value_type = field_type.value_type.as_deref().unwrap();
@@ -809,17 +828,33 @@ fn collect_element_referenced_types(element: &HppElement, typedef_names: &mut Ve
 fn collect_field_type(field_type: &FieldType, typedef_names: &mut Vec<String>) {
     match field_type.type_kind {
         TypeKind::Class => {
-            // 添加类类型
-            if !typedef_names.contains(&field_type.type_str) {
-                typedef_names.push(field_type.type_str.clone());
+            // 清理类型名，移除const、&、*等修饰符
+            let cleaned = field_type.type_str
+                .replace("const ", "")
+                .replace("const&", "")
+                .replace("&", "")
+                .replace("*", "")
+                .replace(" ", "");
+            let clean_type_str = cleaned.trim().to_string();
+            
+            if !clean_type_str.is_empty() && !typedef_names.contains(&clean_type_str) {
+                typedef_names.push(clean_type_str);
             }
         },
         TypeKind::StdPtr => {
-            // 添加StdPtr的基类类型
-            if !typedef_names.contains(&field_type.type_str) {
-                typedef_names.push(field_type.type_str.clone());
+            // 清理基类类型名
+            let cleaned = field_type.type_str
+                .replace("const ", "")
+                .replace("const&", "")
+                .replace("&", "")
+                .replace("*", "")
+                .replace(" ", "");
+            let clean_type_str = cleaned.trim().to_string();
+            
+            if !clean_type_str.is_empty() && !typedef_names.contains(&clean_type_str) {
+                typedef_names.push(clean_type_str.clone());
             }
-            let stdptr_typename = format!("StdPtr_{}", field_type.type_str);
+            let stdptr_typename = format!("StdPtr_{}", clean_type_str);
             if !typedef_names.contains(&stdptr_typename) {
                 typedef_names.push(stdptr_typename);
             }

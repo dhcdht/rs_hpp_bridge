@@ -3,10 +3,18 @@ import 'dart:ffi'; // Import dart:ffi
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test_project/flutter_test_project.dart';
-import 'package:flutter_test_project/test.dart';
-import 'package:flutter_test_project/test_ffiapi.dart';
+import 'package:flutter_test_project/output/test.dart';
+import 'package:flutter_test_project/output/test_ffiapi.dart';
 import 'package:ffi/ffi.dart'; // Import ffi for Utf8 and allocation
-import 'package:flutter_test_project/TestModule_public.dart';
+import 'package:flutter_test_project/output/TestModule_public.dart';
+
+// Multi-file imports - test all generated bindings
+import 'package:flutter_test_project/output/simple_types.dart';
+import 'package:flutter_test_project/output/simple_types_ffiapi.dart';
+import 'package:flutter_test_project/output/simple_a.dart';
+import 'package:flutter_test_project/output/simple_a_ffiapi.dart';
+import 'package:flutter_test_project/output/simple_b.dart';
+import 'package:flutter_test_project/output/simple_b_ffiapi.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -246,6 +254,79 @@ void main() {
     //   // Check C++ console output for "Processing std::map<std::string, int>:"
     //   // and the key-value pairs.
     // });
+  });
+
+  group('Multi-file Bridge Tests', () {
+    test('test SimpleTypes (Point)', () async {
+      // Test Point struct
+      final point = Point.Constructor();
+      
+      // Test setting and getting values
+      point.set_x(10);
+      point.set_y(20);
+      expect(point.get_x(), 10);
+      expect(point.get_y(), 20);
+    });
+
+    test('test SimpleA class', () async {
+      // Test SimpleA constructor and basic methods
+      final simpleA = SimpleA.Constructor_int_String(1, "TestA");
+      
+      expect(simpleA.getId(), 1);
+      expect(simpleA.getName(), "TestA");
+      
+      // Test name setter
+      simpleA.setName("UpdatedA");
+      expect(simpleA.getName(), "UpdatedA");
+      
+      // Test Point interaction
+      final point = Point.Constructor();
+      point.set_x(100);
+      point.set_y(200);
+      simpleA.setPosition(point);
+      
+      final retrievedPoint = simpleA.getPosition();
+      expect(retrievedPoint.get_x(), 100);
+      expect(retrievedPoint.get_y(), 200);
+    });
+
+    test('test SimpleB class', () async {
+      // Test SimpleB constructor and basic methods
+      final simpleB = SimpleB.Constructor_int(42);
+      
+      expect(simpleB.getValue(), 42);
+      
+      // Test value setter
+      simpleB.setValue(84);
+      expect(simpleB.getValue(), 84);
+    });
+
+    test('test Cross-file References (SimpleA <-> SimpleB)', () async {
+      // Create instances of both classes
+      final simpleA = SimpleA.Constructor_int_String(1, "A1");
+      final simpleB = SimpleB.Constructor_int(100);
+      
+      // Test cross-references
+      simpleA.connectToB(simpleB);
+      simpleB.connectToA(simpleA);
+      
+      // Verify connections
+      final connectedB = simpleA.getConnectedB();
+      final connectedA = simpleB.getConnectedA();
+      
+      expect(connectedB, isNotNull);
+      expect(connectedA, isNotNull);
+      expect(connectedB.getValue(), 100);
+      expect(connectedA.getId(), 1);
+      
+      // Test complex cross-file method
+      final inputPoint = Point.Constructor();
+      inputPoint.set_x(10);
+      inputPoint.set_y(20);
+      
+      final resultPoint = simpleB.processWithA(simpleA, inputPoint);
+      expect(resultPoint, isNotNull);
+    });
   });
 }
 

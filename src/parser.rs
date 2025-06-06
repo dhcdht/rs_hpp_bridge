@@ -2,6 +2,28 @@ use core::str;
 
 use crate::gen_context::*;
 
+/// 简化类型字符串，移除C++语法如const、&、*等，用于生成合法的函数名
+fn simplify_type_for_naming(type_str: &str) -> String {
+    // 移除常见的C++修饰符和空格
+    let simplified = type_str
+        .replace("const ", "")
+        .replace("const&", "")
+        .replace("&", "")
+        .replace("*", "")
+        .replace(" ", "")
+        .replace("::", "_")
+        .replace("<", "_")
+        .replace(">", "_")
+        .replace(",", "_");
+    
+    // 如果结果为空或只有下划线，使用默认名称
+    if simplified.is_empty() || simplified.chars().all(|c| c == '_') {
+        "param".to_string()
+    } else {
+        simplified
+    }
+}
+
 pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str, include_path: &str) {
     let clang = clang::Clang::new().unwrap();
     let index = clang::Index::new(&clang, true, false);
@@ -213,7 +235,9 @@ fn handle_clang_Constructor(out_hpp_element: &mut HppElement, entity: &clang::En
             if let HppElement::Method(ref mut updated_method) = element {
                 let mut method_name = format!("Constructor");
                 for param in &updated_method.params {
-                    method_name.push_str(&format!("_{}", param.field_type.type_str));
+                    // 简化类型字符串，移除C++语法如const、&、*等
+                    let simplified_type = simplify_type_for_naming(&param.field_type.type_str);
+                    method_name.push_str(&format!("_{}", simplified_type));
                 }
                 updated_method.comment_str = entity.get_comment();
                 updated_method.method_type = MethodType::Constructor;

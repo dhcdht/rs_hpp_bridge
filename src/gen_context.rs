@@ -363,8 +363,14 @@ impl FieldType {
         }
 
         // 一些特殊处理的类型
-        // std::string
-        if lower_full_str == "std::string" || lower_full_str == "string" {
+        // std::string - 需要处理引用类型
+        let clean_string_type = lower_full_str
+            .replace("&", "")
+            .replace("*", "")
+            .trim()
+            .to_string();
+        
+        if clean_string_type == "std::string" || clean_string_type == "string" {
             field_type.type_kind = TypeKind::String;
             field_type.full_str = "std::string".to_string();
             field_type.type_str = "String".to_string();
