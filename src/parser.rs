@@ -176,10 +176,126 @@ fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: 
             // 当用到了某个类型的 std::vector 时，需要生成这个 std::vector 类对应的方法
             if (method.return_type.type_kind == TypeKind::StdVector) {
                 let stdvector_element = HppElement::new_stdvector_class_element(&method.return_type);
-                if !out_hpp_elements.contains(&stdvector_element) {
+                let already_exists = out_hpp_elements.iter().any(|element| {
+                    match element {
+                        HppElement::Class(cls) => {
+                            match &stdvector_element {
+                                HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                _ => false,
+                            }
+                        },
+                        _ => false,
+                    }
+                });
+                
+                if !already_exists {
                     match &stdvector_element {
-                        HppElement::Class(class) => {
+                        HppElement::Class(_) => {
                             out_hpp_elements.push(stdvector_element);
+                        }
+                        _ffi => {
+                            unimplemented!("post_process_hpp_element unimplemented");
+                        }
+                    }
+                }
+            }
+            // 处理 std::map 返回类型
+            else if (method.return_type.type_kind == TypeKind::StdMap) {
+                let stdmap_element = HppElement::new_stdmap_class_element(&method.return_type);
+                let already_exists = out_hpp_elements.iter().any(|element| {
+                    match element {
+                        HppElement::Class(cls) => {
+                            match &stdmap_element {
+                                HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                _ => false,
+                            }
+                        },
+                        _ => false,
+                    }
+                });
+                
+                if !already_exists {
+                    match &stdmap_element {
+                        HppElement::Class(_) => {
+                            out_hpp_elements.push(stdmap_element);
+                        }
+                        _ffi => {
+                            unimplemented!("post_process_hpp_element unimplemented");
+                        }
+                    }
+                }
+            }
+            // 处理 std::unordered_map 返回类型
+            else if (method.return_type.type_kind == TypeKind::StdUnorderedMap) {
+                let stdunorderedmap_element = HppElement::new_stdunorderedmap_class_element(&method.return_type);
+                let already_exists = out_hpp_elements.iter().any(|element| {
+                    match element {
+                        HppElement::Class(cls) => {
+                            match &stdunorderedmap_element {
+                                HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                _ => false,
+                            }
+                        },
+                        _ => false,
+                    }
+                });
+                
+                if !already_exists {
+                    match &stdunorderedmap_element {
+                        HppElement::Class(_) => {
+                            out_hpp_elements.push(stdunorderedmap_element);
+                        }
+                        _ffi => {
+                            unimplemented!("post_process_hpp_element unimplemented");
+                        }
+                    }
+                }
+            }
+            // 处理 std::set 返回类型
+            else if (method.return_type.type_kind == TypeKind::StdSet) {
+                let stdset_element = HppElement::new_stdset_class_element(&method.return_type);
+                let already_exists = out_hpp_elements.iter().any(|element| {
+                    match element {
+                        HppElement::Class(cls) => {
+                            match &stdset_element {
+                                HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                _ => false,
+                            }
+                        },
+                        _ => false,
+                    }
+                });
+                
+                if !already_exists {
+                    match &stdset_element {
+                        HppElement::Class(_) => {
+                            out_hpp_elements.push(stdset_element);
+                        }
+                        _ffi => {
+                            unimplemented!("post_process_hpp_element unimplemented");
+                        }
+                    }
+                }
+            }
+            // 处理 std::unordered_set 返回类型
+            else if (method.return_type.type_kind == TypeKind::StdUnorderedSet) {
+                let stdunorderedset_element = HppElement::new_stdunorderedset_class_element(&method.return_type);
+                let already_exists = out_hpp_elements.iter().any(|element| {
+                    match element {
+                        HppElement::Class(cls) => {
+                            match &stdunorderedset_element {
+                                HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                _ => false,
+                            }
+                        },
+                        _ => false,
+                    }
+                });
+                
+                if !already_exists {
+                    match &stdunorderedset_element {
+                        HppElement::Class(_) => {
+                            out_hpp_elements.push(stdunorderedset_element);
                         }
                         _ffi => {
                             unimplemented!("post_process_hpp_element unimplemented");
@@ -190,10 +306,126 @@ fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: 
             for param in &method.params {
                 if (param.field_type.type_kind == TypeKind::StdVector) {
                         let stdvector_element = HppElement::new_stdvector_class_element(&param.field_type);
-                        if !out_hpp_elements.contains(&stdvector_element) {
+                        let already_exists = out_hpp_elements.iter().any(|element| {
+                            match element {
+                                HppElement::Class(cls) => {
+                                    match &stdvector_element {
+                                        HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                        _ => false,
+                                    }
+                                },
+                                _ => false,
+                            }
+                        });
+                        
+                        if !already_exists {
                             match &stdvector_element {
-                                HppElement::Class(class) => {
+                                HppElement::Class(_) => {
                                     out_hpp_elements.push(stdvector_element);
+                                }
+                                _ffi => {
+                                    unimplemented!("post_process_hpp_element unimplemented");
+                                }
+                            }
+                        }
+                }
+                // 处理 std::map 参数类型
+                else if (param.field_type.type_kind == TypeKind::StdMap) {
+                        let stdmap_element = HppElement::new_stdmap_class_element(&param.field_type);
+                        let already_exists = out_hpp_elements.iter().any(|element| {
+                            match element {
+                                HppElement::Class(cls) => {
+                                    match &stdmap_element {
+                                        HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                        _ => false,
+                                    }
+                                },
+                                _ => false,
+                            }
+                        });
+                        
+                        if !already_exists {
+                            match &stdmap_element {
+                                HppElement::Class(_) => {
+                                    out_hpp_elements.push(stdmap_element);
+                                }
+                                _ffi => {
+                                    unimplemented!("post_process_hpp_element unimplemented");
+                                }
+                            }
+                        }
+                }
+                // 处理 std::unordered_map 参数类型
+                else if (param.field_type.type_kind == TypeKind::StdUnorderedMap) {
+                        let stdunorderedmap_element = HppElement::new_stdunorderedmap_class_element(&param.field_type);
+                        let already_exists = out_hpp_elements.iter().any(|element| {
+                            match element {
+                                HppElement::Class(cls) => {
+                                    match &stdunorderedmap_element {
+                                        HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                        _ => false,
+                                    }
+                                },
+                                _ => false,
+                            }
+                        });
+                        
+                        if !already_exists {
+                            match &stdunorderedmap_element {
+                                HppElement::Class(_) => {
+                                    out_hpp_elements.push(stdunorderedmap_element);
+                                }
+                                _ffi => {
+                                    unimplemented!("post_process_hpp_element unimplemented");
+                                }
+                            }
+                        }
+                }
+                // 处理 std::set 参数类型
+                else if (param.field_type.type_kind == TypeKind::StdSet) {
+                        let stdset_element = HppElement::new_stdset_class_element(&param.field_type);
+                        let already_exists = out_hpp_elements.iter().any(|element| {
+                            match element {
+                                HppElement::Class(cls) => {
+                                    match &stdset_element {
+                                        HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                        _ => false,
+                                    }
+                                },
+                                _ => false,
+                            }
+                        });
+                        
+                        if !already_exists {
+                            match &stdset_element {
+                                HppElement::Class(_) => {
+                                    out_hpp_elements.push(stdset_element);
+                                }
+                                _ffi => {
+                                    unimplemented!("post_process_hpp_element unimplemented");
+                                }
+                            }
+                        }
+                }
+                // 处理 std::unordered_set 参数类型
+                else if (param.field_type.type_kind == TypeKind::StdUnorderedSet) {
+                        let stdunorderedset_element = HppElement::new_stdunorderedset_class_element(&param.field_type);
+                        let already_exists = out_hpp_elements.iter().any(|element| {
+                            match element {
+                                HppElement::Class(cls) => {
+                                    match &stdunorderedset_element {
+                                        HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                        _ => false,
+                                    }
+                                },
+                                _ => false,
+                            }
+                        });
+                        
+                        if !already_exists {
+                            match &stdunorderedset_element {
+                                HppElement::Class(_) => {
+                                    out_hpp_elements.push(stdunorderedset_element);
                                 }
                                 _ffi => {
                                     unimplemented!("post_process_hpp_element unimplemented");
@@ -206,10 +438,126 @@ fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: 
         HppElement::Field(field) => {
             if field.field_type.type_kind == TypeKind::StdVector {
                 let stdvector_element = HppElement::new_stdvector_class_element(&field.field_type);
-                if !out_hpp_elements.contains(&stdvector_element) {
+                let already_exists = out_hpp_elements.iter().any(|element| {
+                    match element {
+                        HppElement::Class(cls) => {
+                            match &stdvector_element {
+                                HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                _ => false,
+                            }
+                        },
+                        _ => false,
+                    }
+                });
+                
+                if !already_exists {
                     match &stdvector_element {
-                        HppElement::Class(class) => {
+                        HppElement::Class(_) => {
                             out_hpp_elements.push(stdvector_element);
+                        }
+                        _ffi => {
+                            unimplemented!("post_process_hpp_element unimplemented");
+                        }
+                    }
+                }
+            }
+            // 处理 std::map 字段类型
+            else if field.field_type.type_kind == TypeKind::StdMap {
+                let stdmap_element = HppElement::new_stdmap_class_element(&field.field_type);
+                let already_exists = out_hpp_elements.iter().any(|element| {
+                    match element {
+                        HppElement::Class(cls) => {
+                            match &stdmap_element {
+                                HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                _ => false,
+                            }
+                        },
+                        _ => false,
+                    }
+                });
+                
+                if !already_exists {
+                    match &stdmap_element {
+                        HppElement::Class(_) => {
+                            out_hpp_elements.push(stdmap_element);
+                        }
+                        _ffi => {
+                            unimplemented!("post_process_hpp_element unimplemented");
+                        }
+                    }
+                }
+            }
+            // 处理 std::unordered_map 字段类型
+            else if field.field_type.type_kind == TypeKind::StdUnorderedMap {
+                let stdunorderedmap_element = HppElement::new_stdunorderedmap_class_element(&field.field_type);
+                let already_exists = out_hpp_elements.iter().any(|element| {
+                    match element {
+                        HppElement::Class(cls) => {
+                            match &stdunorderedmap_element {
+                                HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                _ => false,
+                            }
+                        },
+                        _ => false,
+                    }
+                });
+                
+                if !already_exists {
+                    match &stdunorderedmap_element {
+                        HppElement::Class(_) => {
+                            out_hpp_elements.push(stdunorderedmap_element);
+                        }
+                        _ffi => {
+                            unimplemented!("post_process_hpp_element unimplemented");
+                        }
+                    }
+                }
+            }
+            // 处理 std::set 字段类型
+            else if field.field_type.type_kind == TypeKind::StdSet {
+                let stdset_element = HppElement::new_stdset_class_element(&field.field_type);
+                let already_exists = out_hpp_elements.iter().any(|element| {
+                    match element {
+                        HppElement::Class(cls) => {
+                            match &stdset_element {
+                                HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                _ => false,
+                            }
+                        },
+                        _ => false,
+                    }
+                });
+                
+                if !already_exists {
+                    match &stdset_element {
+                        HppElement::Class(_) => {
+                            out_hpp_elements.push(stdset_element);
+                        }
+                        _ffi => {
+                            unimplemented!("post_process_hpp_element unimplemented");
+                        }
+                    }
+                }
+            }
+            // 处理 std::unordered_set 字段类型
+            else if field.field_type.type_kind == TypeKind::StdUnorderedSet {
+                let stdunorderedset_element = HppElement::new_stdunorderedset_class_element(&field.field_type);
+                let already_exists = out_hpp_elements.iter().any(|element| {
+                    match element {
+                        HppElement::Class(cls) => {
+                            match &stdunorderedset_element {
+                                HppElement::Class(new_cls) => cls.type_str == new_cls.type_str,
+                                _ => false,
+                            }
+                        },
+                        _ => false,
+                    }
+                });
+                
+                if !already_exists {
+                    match &stdunorderedset_element {
+                        HppElement::Class(_) => {
+                            out_hpp_elements.push(stdunorderedset_element);
                         }
                         _ffi => {
                             unimplemented!("post_process_hpp_element unimplemented");

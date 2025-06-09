@@ -5,6 +5,9 @@
 #include <string> // Add include for std::string
 #include <vector> // Add include for std::vector
 #include <map>      // Add include for std::map
+#include <unordered_map> // Add include for std::unordered_map
+#include <set>      // Add include for std::set
+#include <unordered_set> // Add include for std::unordered_set
 #include <memory>   // Add include for std::shared_ptr
 
 // Define a simple struct for testing
@@ -67,9 +70,11 @@ public:
     std::shared_ptr<SimpleStruct> getSharedStruct();
     void processSharedStruct(std::shared_ptr<SimpleStruct> s_ptr);
 
-    // // Map test
-    // std::map<std::string, int> getMap();
-    // void processMap(const std::map<std::string, int>& map_data);
+    // Map and Set test
+    std::map<std::string, int> testStdMap(std::map<int, std::string> m);
+    std::unordered_map<int, std::string> testStdUnorderedMap(std::unordered_map<std::string, int> m);
+    std::set<int> testStdSet(std::set<std::string> s);
+    std::unordered_set<std::string> testStdUnorderedSet(std::unordered_set<int> s);
 };
 
 #endif // TEST_HPP

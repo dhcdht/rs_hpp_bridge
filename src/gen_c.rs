@@ -561,6 +561,58 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
                 return format!("FFI_StdVector_{}", field_type.get_value_type_str());
             }
         }
+        TypeKind::StdMap => {
+            let key_type = field_type.key_type.as_deref().unwrap();
+            let value_type = field_type.value_type.as_deref().unwrap();
+            
+            let key_type_str = if key_type.type_kind == TypeKind::String {
+                "String".to_string()
+            } else {
+                field_type.get_key_type_str()
+            };
+            
+            let value_type_str = if value_type.type_kind == TypeKind::String {
+                "String".to_string()
+            } else {
+                field_type.get_value_type_str()
+            };
+            
+            return format!("FFI_StdMap_{}_{}", key_type_str, value_type_str);
+        }
+        TypeKind::StdUnorderedMap => {
+            let key_type = field_type.key_type.as_deref().unwrap();
+            let value_type = field_type.value_type.as_deref().unwrap();
+            
+            let key_type_str = if key_type.type_kind == TypeKind::String {
+                "String".to_string()
+            } else {
+                field_type.get_key_type_str()
+            };
+            
+            let value_type_str = if value_type.type_kind == TypeKind::String {
+                "String".to_string()
+            } else {
+                field_type.get_value_type_str()
+            };
+            
+            return format!("FFI_StdUnorderedMap_{}_{}", key_type_str, value_type_str);
+        }
+        TypeKind::StdSet => {
+            let value_type = field_type.value_type.as_deref().unwrap();
+            if (value_type.type_kind == TypeKind::String) {
+                return format!("FFI_StdSet_String");
+            } else {
+                return format!("FFI_StdSet_{}", field_type.get_value_type_str());
+            }
+        }
+        TypeKind::StdUnorderedSet => {
+            let value_type = field_type.value_type.as_deref().unwrap();
+            if (value_type.type_kind == TypeKind::String) {
+                return format!("FFI_StdUnorderedSet_String");
+            } else {
+                return format!("FFI_StdUnorderedSet_{}", field_type.get_value_type_str());
+            }
+        }
         _ => {
             unimplemented!("get_ffi_type_str: unknown type kind");
         }
@@ -598,7 +650,37 @@ fn get_str_method_impl(class: Option<&Class>, method: &Method) -> String {
     {}
     return ({})new std::shared_ptr<{}>({});
 }};", method_prefix, param_prefix, impl_return_type, method.return_type.type_str, param_str);
-            } 
+            }
+            else if method.return_type.type_kind == TypeKind::StdMap {
+                let container_type = method.return_type.full_str.clone();
+                method_impl = format!("{} {{
+    {}
+    return ({})new {}({});
+}};", method_prefix, param_prefix, impl_return_type, container_type, param_str);
+            }
+            else if method.return_type.type_kind == TypeKind::StdUnorderedMap {
+                let container_type = method.return_type.full_str.clone();
+                method_impl = format!("{} {{
+    {}
+    return ({})new {}({});
+}};", method_prefix, param_prefix, impl_return_type, container_type, param_str);
+            }
+            else if method.return_type.type_kind == TypeKind::StdSet {
+                // 确保使用正确的 std::set 类型
+                let container_type = method.return_type.full_str.clone();
+                method_impl = format!("{} {{
+    {}
+    return ({})new {}({});
+}};", method_prefix, param_prefix, impl_return_type, container_type, param_str);
+            }
+            else if method.return_type.type_kind == TypeKind::StdUnorderedSet {
+                // 确保使用正确的 std::unordered_set 类型
+                let container_type = method.return_type.full_str.clone();
+                method_impl = format!("{} {{
+    {}
+    return ({})new {}({});
+}};", method_prefix, param_prefix, impl_return_type, container_type, param_str);
+            }
             else {
                 method_impl = format!("{} {{
     {}
@@ -661,6 +743,97 @@ fn get_str_method_impl_body(class: Option<&Class>, return_field_type: &FieldType
         &format!("({})", param_str.unwrap()) 
     };
     
+    // 特殊处理 Map 和 Set 的方法
+    if let Some(cur_class) = class {
+        if cur_class.class_type == ClassType::StdMap {
+            match method_name {
+                "insert" => {
+                    // Map insert() 需要使用 std::make_pair
+                    if param_str.is_some() {
+                        let params: Vec<&str> = param_str.unwrap().split(", ").collect();
+                        if params.len() == 2 {
+                            return format!("return (void)ptr->insert(std::make_pair({}, {}));", params[0], params[1]);
+                        }
+                    }
+                    return format!("return (void)ptr->insert{};", full_param_str);
+                }
+                "find" => {
+                    // Map find() 返回迭代器，需要检查是否找到并返回值
+                    if return_field_type.type_kind == TypeKind::String {
+                        return format!("static std::string retStr = \"\";
+    auto it = ptr->find{};
+    if (it != ptr->end()) {{
+        retStr = it->second;
+    }} else {{
+        retStr = \"\";
+    }}
+    return (const char*)retStr.c_str();", full_param_str);
+                    } else {
+                        return format!("auto it = ptr->find{};
+    return ({})(it != ptr->end() ? it->second : {});", full_param_str, impl_return_type, 
+                            if return_field_type.type_kind == TypeKind::Int64 { "0" } else { "0" });
+                    }
+                }
+                _ => {}
+            }
+        } else if cur_class.class_type == ClassType::StdUnorderedMap {
+            match method_name {
+                "insert" => {
+                    // UnorderedMap insert() 需要使用 std::make_pair
+                    if param_str.is_some() {
+                        let params: Vec<&str> = param_str.unwrap().split(", ").collect();
+                        if params.len() == 2 {
+                            return format!("return (void)ptr->insert(std::make_pair({}, {}));", params[0], params[1]);
+                        }
+                    }
+                    return format!("return (void)ptr->insert{};", full_param_str);
+                }
+                "find" => {
+                    // UnorderedMap find() 返回迭代器，需要检查是否找到并返回值
+                    if return_field_type.type_kind == TypeKind::String {
+                        return format!("static std::string retStr = \"\";
+    auto it = ptr->find{};
+    if (it != ptr->end()) {{
+        retStr = it->second;
+    }} else {{
+        retStr = \"\";
+    }}
+    return (const char*)retStr.c_str();", full_param_str);
+                    } else {
+                        return format!("auto it = ptr->find{};
+    return ({})(it != ptr->end() ? it->second : {});", full_param_str, impl_return_type, 
+                            if return_field_type.type_kind == TypeKind::Int64 { "0" } else { "0" });
+                    }
+                }
+                _ => {}
+            }
+        } else if cur_class.class_type == ClassType::StdSet {
+            match method_name {
+                "insert" => {
+                    // Set insert() 直接插入值
+                    return format!("return (void)ptr->insert{};", full_param_str);
+                }
+                "contains" => {
+                    // Set contains() 检查是否包含
+                    return format!("return (int)(ptr->find{} != ptr->end());", full_param_str);
+                }
+                _ => {}
+            }
+        } else if cur_class.class_type == ClassType::StdUnorderedSet {
+            match method_name {
+                "insert" => {
+                    // UnorderedSet insert() 直接插入值
+                    return format!("return (void)ptr->insert{};", full_param_str);
+                }
+                "contains" => {
+                    // UnorderedSet contains() 检查是否包含
+                    return format!("return (int)(ptr->find{} != ptr->end());", full_param_str);
+                }
+                _ => {}
+            }
+        }
+    }
+    
     if return_field_type.type_kind == TypeKind::String {
         return format!("static std::string retStr = \"\";
     retStr = {}{}{};
@@ -673,6 +846,14 @@ fn get_str_method_impl_body(class: Option<&Class>, return_field_type: &FieldType
     || (return_field_type.type_kind == TypeKind::StdVector && 0 == return_field_type.ptr_level) 
     {
         return format!("return ({})new {}({}{}{});", impl_return_type, return_field_type.full_str, call_prefix, method_name, full_param_str);
+    }
+    else if (return_field_type.type_kind == TypeKind::StdMap && 0 == return_field_type.ptr_level) 
+    || (return_field_type.type_kind == TypeKind::StdUnorderedMap && 0 == return_field_type.ptr_level)
+    || (return_field_type.type_kind == TypeKind::StdSet && 0 == return_field_type.ptr_level) 
+    || (return_field_type.type_kind == TypeKind::StdUnorderedSet && 0 == return_field_type.ptr_level) 
+    {
+        let container_type = return_field_type.full_str.clone();
+        return format!("return ({})new {}({}{}{});", impl_return_type, container_type, call_prefix, method_name, full_param_str);
     }
     else {
         return format!("return ({}){}{}{};", impl_return_type, call_prefix, method_name, full_param_str);
@@ -748,6 +929,24 @@ fn get_str_params_impl(class: Option<&Class>, method: &Method) -> (String, Strin
                 let suffix = cur_class.value_type.as_deref().unwrap().full_str.clone();
                 param_prefixs.push(format!("std::vector<{}>* ptr = (std::vector<{}>*)obj;", suffix, suffix));
             }
+            else if cur_class.class_type ==  ClassType::StdMap {
+                let key_suffix = cur_class.key_type.as_deref().unwrap().full_str.clone();
+                let value_suffix = cur_class.value_type.as_deref().unwrap().full_str.clone();
+                param_prefixs.push(format!("std::map<{}, {}>* ptr = (std::map<{}, {}>*)obj;", key_suffix, value_suffix, key_suffix, value_suffix));
+            }
+            else if cur_class.class_type ==  ClassType::StdUnorderedMap {
+                let key_suffix = cur_class.key_type.as_deref().unwrap().full_str.clone();
+                let value_suffix = cur_class.value_type.as_deref().unwrap().full_str.clone();
+                param_prefixs.push(format!("std::unordered_map<{}, {}>* ptr = (std::unordered_map<{}, {}>*)obj;", key_suffix, value_suffix, key_suffix, value_suffix));
+            }
+            else if cur_class.class_type ==  ClassType::StdSet {
+                let suffix = cur_class.value_type.as_deref().unwrap().full_str.clone();
+                param_prefixs.push(format!("std::set<{}>* ptr = (std::set<{}>*)obj;", suffix, suffix));
+            }
+            else if cur_class.class_type ==  ClassType::StdUnorderedSet {
+                let suffix = cur_class.value_type.as_deref().unwrap().full_str.clone();
+                param_prefixs.push(format!("std::unordered_set<{}>* ptr = (std::unordered_set<{}>*)obj;", suffix, suffix));
+            }
             else {
                 param_prefixs.push(format!("{}* ptr = ({}*)obj;", cur_class.type_str, cur_class.type_str));
             }
@@ -776,7 +975,23 @@ fn get_str_ffi_to_cpp_param_field(field_type: &FieldType, param_name: &str) -> S
     || (field_type.type_kind == TypeKind::StdVector && 0 == field_type.ptr_level)
     {
         return format!("({})(*({}*){})", &field_type.full_str, &field_type.full_str, param_name);
-    } 
+    }
+    else if (field_type.type_kind == TypeKind::StdMap && 0 == field_type.ptr_level) {
+        let container_type = field_type.full_str.clone();
+        return format!("({})(*({}*){})", container_type, container_type, param_name);
+    }
+    else if (field_type.type_kind == TypeKind::StdUnorderedMap && 0 == field_type.ptr_level) {
+        let container_type = field_type.full_str.clone();
+        return format!("({})(*({}*){})", container_type, container_type, param_name);
+    }
+    else if (field_type.type_kind == TypeKind::StdSet && 0 == field_type.ptr_level) {
+        let container_type = field_type.full_str.clone();
+        return format!("({})(*({}*){})", container_type, container_type, param_name);
+    }
+    else if (field_type.type_kind == TypeKind::StdUnorderedSet && 0 == field_type.ptr_level) {
+        let container_type = field_type.full_str.clone();
+        return format!("({})(*({}*){})", container_type, container_type, param_name);
+    }
     else {
         if field_type.ptr_level > 0 {
             return format!("({}{}){}", &field_type.type_str, "*".repeat(field_type.ptr_level as usize), param_name);
@@ -868,6 +1083,62 @@ fn collect_field_type(field_type: &FieldType, typedef_names: &mut Vec<String>) {
                 let vector_type_str = format!("StdVector_{}", field_type.get_value_type_str());
                 if !typedef_names.contains(&vector_type_str) {
                     typedef_names.push(vector_type_str);
+                }
+            }
+        },
+        TypeKind::StdMap => {
+            // 处理map内部的键和值类型
+            if let Some(key_type) = &field_type.key_type {
+                collect_field_type(key_type, typedef_names);
+            }
+            
+            if let Some(value_type) = &field_type.value_type {
+                collect_field_type(value_type, typedef_names);
+                
+                // 添加StdMap类型本身
+                let map_type_str = format!("StdMap_{}_{}", field_type.get_key_type_str(), field_type.get_value_type_str());
+                if !typedef_names.contains(&map_type_str) {
+                    typedef_names.push(map_type_str);
+                }
+            }
+        },
+        TypeKind::StdUnorderedMap => {
+            // 处理unordered_map内部的键和值类型
+            if let Some(key_type) = &field_type.key_type {
+                collect_field_type(key_type, typedef_names);
+            }
+            
+            if let Some(value_type) = &field_type.value_type {
+                collect_field_type(value_type, typedef_names);
+                
+                // 添加StdUnorderedMap类型本身
+                let map_type_str = format!("StdUnorderedMap_{}_{}", field_type.get_key_type_str(), field_type.get_value_type_str());
+                if !typedef_names.contains(&map_type_str) {
+                    typedef_names.push(map_type_str);
+                }
+            }
+        },
+        TypeKind::StdSet => {
+            // 处理set内部的值类型
+            if let Some(value_type) = &field_type.value_type {
+                collect_field_type(value_type, typedef_names);
+                
+                // 添加StdSet类型本身
+                let set_type_str = format!("StdSet_{}", field_type.get_value_type_str());
+                if !typedef_names.contains(&set_type_str) {
+                    typedef_names.push(set_type_str);
+                }
+            }
+        },
+        TypeKind::StdUnorderedSet => {
+            // 处理unordered_set内部的值类型
+            if let Some(value_type) = &field_type.value_type {
+                collect_field_type(value_type, typedef_names);
+                
+                // 添加StdUnorderedSet类型本身
+                let set_type_str = format!("StdUnorderedSet_{}", field_type.get_value_type_str());
+                if !typedef_names.contains(&set_type_str) {
+                    typedef_names.push(set_type_str);
                 }
             }
         },

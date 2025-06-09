@@ -140,6 +140,25 @@ class {} implements Finalizable {{
             }
             local_dart_gen_context.cur_class = None;
 
+            // 为StdMap、StdUnorderedMap和StdSet类添加便利方法
+            if class.class_type == ClassType::StdMap {
+                let dart_file = local_dart_gen_context.cur_file.as_mut().unwrap();
+                let convenience_methods = generate_stdmap_convenience_methods(class);
+                dart_file.write(convenience_methods.as_bytes());
+            } else if class.class_type == ClassType::StdUnorderedMap {
+                let dart_file = local_dart_gen_context.cur_file.as_mut().unwrap();
+                let convenience_methods = generate_stdunorderedmap_convenience_methods(class);
+                dart_file.write(convenience_methods.as_bytes());
+            } else if class.class_type == ClassType::StdSet {
+                let dart_file = local_dart_gen_context.cur_file.as_mut().unwrap();
+                let convenience_methods = generate_stdset_convenience_methods(class);
+                dart_file.write(convenience_methods.as_bytes());
+            } else if class.class_type == ClassType::StdUnorderedSet {
+                let dart_file = local_dart_gen_context.cur_file.as_mut().unwrap();
+                let convenience_methods = generate_stdunorderedset_convenience_methods(class);
+                dart_file.write(convenience_methods.as_bytes());
+            }
+
             {
             // 公共尾
             let dart_file_footer = local_dart_gen_context.cur_file.as_mut().unwrap();
@@ -336,6 +355,10 @@ fn get_str_dart_fun_body(class: Option<&Class>, method: &Method) -> String {
             }
             else if (method.return_type.type_kind == TypeKind::StdPtr) 
             || method.return_type.type_kind == TypeKind::StdVector
+            || method.return_type.type_kind == TypeKind::StdMap
+            || method.return_type.type_kind == TypeKind::StdUnorderedMap
+            || method.return_type.type_kind == TypeKind::StdSet
+            || method.return_type.type_kind == TypeKind::StdUnorderedSet
             {
                 body_prefix.push_str(&format!("return {}.FromNative({}(", get_str_dart_fun_type(&method.return_type), ffiapi_c_method_name));
                 body_suffix.push_str("));");
@@ -520,6 +543,10 @@ fn get_str_dart_fun_params_impl(class: Option<&Class>, method: &Method) -> Strin
         }
         else if param.field_type.type_kind == TypeKind::StdPtr 
         || param.field_type.type_kind == TypeKind::StdVector
+        || param.field_type.type_kind == TypeKind::StdMap
+        || param.field_type.type_kind == TypeKind::StdUnorderedMap
+        || param.field_type.type_kind == TypeKind::StdSet
+        || param.field_type.type_kind == TypeKind::StdUnorderedSet
         {
             param_strs.push(format!("{}.getNativePtr()", param.name));
         }
@@ -634,6 +661,24 @@ fn get_str_dart_fun_type(field_type: &FieldType) -> String {
         let value_type = field_type.value_type.as_ref().unwrap();
         return format!("StdVector_{}", value_type.type_str);
     }
+    else if field_type.type_kind == TypeKind::StdMap {
+        let key_type = field_type.key_type.as_ref().unwrap();
+        let value_type = field_type.value_type.as_ref().unwrap();
+        return format!("StdMap_{}_{}", key_type.type_str, value_type.type_str);
+    }
+    else if field_type.type_kind == TypeKind::StdUnorderedMap {
+        let key_type = field_type.key_type.as_ref().unwrap();
+        let value_type = field_type.value_type.as_ref().unwrap();
+        return format!("StdUnorderedMap_{}_{}", key_type.type_str, value_type.type_str);
+    }
+    else if field_type.type_kind == TypeKind::StdSet {
+        let value_type = field_type.value_type.as_ref().unwrap();
+        return format!("StdSet_{}", value_type.type_str);
+    }
+    else if field_type.type_kind == TypeKind::StdUnorderedSet {
+        let value_type = field_type.value_type.as_ref().unwrap();
+        return format!("StdUnorderedSet_{}", value_type.type_str);
+    }
 
     // 基础数据类型
     if field_type.ptr_level == 0 {
@@ -743,6 +788,18 @@ fn get_str_dart_api_type(field_type: &FieldType) -> String {
             TypeKind::StdVector => {
                 return "Pointer<Void>".to_string();
             }
+            TypeKind::StdMap => {
+                return "Pointer<Void>".to_string();
+            }
+            TypeKind::StdSet => {
+                return "Pointer<Void>".to_string();
+            }
+            TypeKind::StdUnorderedSet => {
+                return "Pointer<Void>".to_string();
+            }
+            TypeKind::StdUnorderedMap => {
+                return "Pointer<Void>".to_string();
+            }
             _ => {
                 unimplemented!("get_dart_fun_type_str: unknown type kind, {:?}", field_type);
             }
@@ -841,6 +898,18 @@ fn get_str_native_api_type(field_type: &FieldType) -> String {
             TypeKind::StdVector => {
                 return "Pointer<Void>".to_string();
             }
+            TypeKind::StdMap => {
+                return "Pointer<Void>".to_string();
+            }
+            TypeKind::StdSet => {
+                return "Pointer<Void>".to_string();
+            }
+            TypeKind::StdUnorderedSet => {
+                return "Pointer<Void>".to_string();
+            }
+            TypeKind::StdUnorderedMap => {
+                return "Pointer<Void>".to_string();
+            }
             _ => {
                 unimplemented!("get_native_fun_type_str: unknown type kind, {:?}", field_type);
             }
@@ -934,6 +1003,39 @@ fn collect_referenced_types_from_field_type(field_type: &FieldType, referenced_t
                 collect_referenced_types_from_field_type(value_type, referenced_types);
             }
         },
+        TypeKind::StdMap => {
+            if let Some(key_type) = &field_type.key_type {
+                if let Some(value_type) = &field_type.value_type {
+                    let map_type = format!("StdMap_{}_{}", key_type.type_str, value_type.type_str);
+                    if !referenced_types.contains(&map_type) {
+                        referenced_types.push(map_type);
+                    }
+                    // 递归收集键类型和值类型
+                    collect_referenced_types_from_field_type(key_type, referenced_types);
+                    collect_referenced_types_from_field_type(value_type, referenced_types);
+                }
+            }
+        },
+        TypeKind::StdSet => {
+            if let Some(value_type) = &field_type.value_type {
+                let set_type = format!("StdSet_{}", value_type.type_str);
+                if !referenced_types.contains(&set_type) {
+                    referenced_types.push(set_type);
+                }
+                // 递归收集值类型
+                collect_referenced_types_from_field_type(value_type, referenced_types);
+            }
+        },
+        TypeKind::StdUnorderedSet => {
+            if let Some(value_type) = &field_type.value_type {
+                let set_type = format!("StdUnorderedSet_{}", value_type.type_str);
+                if !referenced_types.contains(&set_type) {
+                    referenced_types.push(set_type);
+                }
+                // 递归收集值类型
+                collect_referenced_types_from_field_type(value_type, referenced_types);
+            }
+        },
         _ => {} // 基本类型不需要处理
     }
 }
@@ -1005,4 +1107,186 @@ fn element_contains_type(element: &HppElement, type_name: &str) -> bool {
         }
     }
     false
+}
+
+/// 为StdMap类生成便利方法
+fn generate_stdmap_convenience_methods(class: &Class) -> String {
+    let key_type = class.key_type.as_ref().unwrap();
+    let value_type = class.value_type.as_ref().unwrap();
+    let key_dart_type = get_str_dart_fun_type(key_type);
+    let value_dart_type = get_str_dart_fun_type(value_type);
+    
+    format!(r#"
+    // 便利构造函数 - 从Dart Map创建
+    {}.fromMap(Map<{}, {}> map) {{
+        _nativePtr = ffi_{}_Constructor();
+        nativeLifecycleLink();
+        for (var entry in map.entries) {{
+            insert(entry.key, entry.value);
+        }}
+    }}
+    
+    // length属性
+    int get length => size();
+    
+    // []操作符
+    {} operator [](dynamic key) {{
+        return find(key);
+    }}
+    
+    // []= 操作符
+    void operator []=(dynamic key, dynamic value) {{
+        insert(key, value);
+    }}
+    
+    // contains方法
+    bool contains(dynamic key) {{
+        return count(key) > 0;
+    }}
+    
+    // 转换为Dart Map
+    Map<{}, {}> toMap() {{
+        Map<{}, {}> result = {{}};
+        // 注意：这里需要通过FFI迭代来实现
+        // 暂时返回空Map，需要额外的FFI支持来实现迭代
+        return result;
+    }}
+"#, 
+        class.type_str, 
+        key_dart_type, value_dart_type,
+        class.type_str,
+        value_dart_type,
+        key_dart_type, value_dart_type,
+        key_dart_type, value_dart_type
+    )
+}
+
+/// 为StdUnorderedMap类生成便利方法
+fn generate_stdunorderedmap_convenience_methods(class: &Class) -> String {
+    let key_type = class.key_type.as_ref().unwrap();
+    let value_type = class.value_type.as_ref().unwrap();
+    let key_dart_type = get_str_dart_fun_type(key_type);
+    let value_dart_type = get_str_dart_fun_type(value_type);
+    
+    format!(r#"
+    // 便利构造函数 - 从Dart Map创建
+    {}.fromMap(Map<{}, {}> map) {{
+        _nativePtr = ffi_{}_Constructor();
+        nativeLifecycleLink();
+        for (var entry in map.entries) {{
+            insert(entry.key, entry.value);
+        }}
+    }}
+    
+    // length属性
+    int get length => size();
+    
+    // []操作符
+    {} operator [](dynamic key) {{
+        return find(key);
+    }}
+    
+    // []= 操作符
+    void operator []=(dynamic key, dynamic value) {{
+        insert(key, value);
+    }}
+    
+    // contains方法
+    bool contains(dynamic key) {{
+        return count(key) > 0;
+    }}
+    
+    // 转换为Dart Map
+    Map<{}, {}> toMap() {{
+        Map<{}, {}> result = {{}};
+        // 注意：这里需要通过FFI迭代来实现
+        // 暂时返回空Map，需要额外的FFI支持来实现迭代
+        return result;
+    }}
+"#, 
+        class.type_str, 
+        key_dart_type, value_dart_type,
+        class.type_str,
+        value_dart_type,
+        key_dart_type, value_dart_type,
+        key_dart_type, value_dart_type
+    )
+}
+
+/// 为StdSet类生成便利方法
+fn generate_stdset_convenience_methods(class: &Class) -> String {
+    let value_type = class.value_type.as_ref().unwrap();
+    let value_dart_type = get_str_dart_fun_type(value_type);
+    
+    format!(r#"
+    // 便利构造函数 - 从Dart Set创建
+    {}.fromSet(Set<{}> set) {{
+        _nativePtr = ffi_{}_Constructor();
+        nativeLifecycleLink();
+        for (var value in set) {{
+            insert(value);
+        }}
+    }}
+    
+    // length属性
+    int get length => size();
+    
+    // contains方法
+    bool contains(dynamic value) {{
+        return count(value) > 0;
+    }}
+    
+    // 转换为Dart Set
+    Set<{}> toSet() {{
+        Set<{}> result = {{}};
+        // 注意：这里需要通过FFI迭代来实现
+        // 暂时返回空Set，需要额外的FFI支持来实现迭代
+        return result;
+    }}
+"#, 
+        class.type_str, 
+        value_dart_type,
+        class.type_str,
+        value_dart_type,
+        value_dart_type
+    )
+}
+
+/// 为StdUnorderedSet类生成便利方法
+fn generate_stdunorderedset_convenience_methods(class: &Class) -> String {
+    let value_type = class.value_type.as_ref().unwrap();
+    let value_dart_type = get_str_dart_fun_type(value_type);
+    
+    format!(r#"
+    // 便利构造函数 - 从Dart Set创建
+    {}.fromSet(Set<{}> set) {{
+        _nativePtr = ffi_{}_Constructor();
+        nativeLifecycleLink();
+        for (var value in set) {{
+            insert(value);
+        }}
+    }}
+    
+    // length属性
+    int get length => size();
+    
+    // contains方法
+    bool contains(dynamic value) {{
+        return count(value) > 0;
+    }}
+    
+    // 转换为Dart Set
+    Set<{}> toSet() {{
+        Set<{}> result = {{}};
+        // 注意：这里需要通过FFI迭代来实现
+        // 暂时返回空Set，需要额外的FFI支持来实现迭代
+        return result;
+    }}
+"#, 
+        class.type_str, 
+        value_dart_type,
+        class.type_str,
+        value_dart_type,
+        value_dart_type
+    )
 }

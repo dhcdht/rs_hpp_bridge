@@ -237,23 +237,89 @@ void main() {
       // sharedStructPtr.release(); // Or similar method if generated
     });
 
-    // test('test Map', () async {
-    //   final t = testClassInstance;
+    test('test StdMap', () async {
+      final t = TestClass.Constructor();
+      
+      // Create a Map<int, String> to send to C++
+      final inputMap = <int, String>{
+        1: "One",
+        2: "Two",
+        3: "Three"
+      };
+      
+      // Convert to StdMap using convenience constructor
+      final stdInputMap = StdMap_int_String.fromMap(inputMap);
+      
+      // Test sending StdMap to C++ and getting result back
+      final resultMap = t.testStdMap(stdInputMap);
+      expect(resultMap, isA<StdMap_String_int>());
+      expect(resultMap.length, 3);
+      expect(resultMap["One"], 1);
+      expect(resultMap["Two"], 2);
+      expect(resultMap["Three"], 3);
+      expect(resultMap.contains("One"), true);
+      expect(resultMap.contains("Four"), false);
+    });
 
-    //   // Test getMap
-    //   final mapData = t.getMap();
-    //   expect(mapData, isA<Map<String, int>>());
-    //   expect(mapData.length, 3);
-    //   expect(mapData['apple'], 1);
-    //   expect(mapData['banana'], 2);
-    //   expect(mapData['cherry'], 3);
+    test('test StdUnorderedMap', () async {
+      final t = TestClass.Constructor();
+      
+      // Create a Map<String, int> to send to C++
+      final inputMap = <String, int>{
+        "One": 1,
+        "Two": 2,
+        "Three": 3
+      };
+      
+      // Convert to StdUnorderedMap using convenience constructor
+      final stdInputMap = StdUnorderedMap_String_int.fromMap(inputMap);
+      
+      // Test sending StdUnorderedMap to C++ and getting result back
+      final resultMap = t.testStdUnorderedMap(stdInputMap);
+      expect(resultMap, isA<StdUnorderedMap_int_String>());
+      expect(resultMap.length, 3);
+      expect(resultMap[1], "One");
+      expect(resultMap[2], "Two");
+      expect(resultMap[3], "Three");
+      expect(resultMap.contains(1), true);
+      expect(resultMap.contains(4), false);
+    });
 
-    //   // Test processMap
-    //   final mapToSend = {'one': 10, 'two': 20};
-    //   t.processMap(mapToSend);
-    //   // Check C++ console output for "Processing std::map<std::string, int>:"
-    //   // and the key-value pairs.
-    // });
+    test('test StdSet', () async {
+      final t = TestClass.Constructor();
+      
+      // Create a Set<String> to send to C++
+      final inputSet = <String>{"Apple", "Banana", "Cherry"};
+      
+      // Convert to StdSet using convenience constructor
+      final stdInputSet = StdSet_String.fromSet(inputSet);
+      
+      // Test sending StdSet to C++ and getting result back
+      final resultSet = t.testStdSet(stdInputSet);
+      expect(resultSet, isA<StdSet_int>());
+      // Set should contain lengths of strings
+      expect(resultSet.contains(5), true); // "Apple" length
+      expect(resultSet.contains(6), true); // "Banana" length
+      expect(resultSet.contains(6), true); // "Cherry" length
+    });
+
+    test('test StdUnorderedSet', () async {
+      final t = TestClass.Constructor();
+      
+      // Create a Set<int> to send to C++
+      final inputSet = <int>{10, 20, 30};
+      
+      // Convert to StdUnorderedSet using convenience constructor
+      final stdInputSet = StdUnorderedSet_int.fromSet(inputSet);
+      
+      // Test sending StdUnorderedSet to C++ and getting result back
+      final resultSet = t.testStdUnorderedSet(stdInputSet);
+      expect(resultSet, isA<StdUnorderedSet_String>());
+      // Set should contain string representations of numbers
+      expect(resultSet.contains("10"), true);
+      expect(resultSet.contains("20"), true);
+      expect(resultSet.contains("30"), true);
+    });
   });
 
   group('Multi-file Bridge Tests', () {

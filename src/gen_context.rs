@@ -28,6 +28,10 @@ pub enum ClassType {
     Callback,
     StdPtr,
     StdVector,
+    StdMap,
+    StdUnorderedMap,
+    StdSet,
+    StdUnorderedSet,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -39,6 +43,8 @@ pub struct Class {
 
     /// 如果是模板类型，这里存储模板参数
     pub value_type: Option<Box<FieldType>>,
+    /// 如果是 map 类型，这里存储 key 类型
+    pub key_type: Option<Box<FieldType>>,
     /// 注释
     pub comment_str: Option<String>,
     /// 源文件位置
@@ -99,6 +105,10 @@ pub enum TypeKind {
     Class,
     StdPtr,
     StdVector,
+    StdMap,
+    StdUnorderedMap,
+    StdSet,
+    StdUnorderedSet,
 }
 
 /// 返回值、字段、参数等的类型
@@ -114,6 +124,8 @@ pub struct FieldType {
 
     /// 如果是模板类型，这里存储模板参数
     pub value_type: Option<Box<FieldType>>,
+    /// 如果是 map 类型，这里存储 key 类型
+    pub key_type: Option<Box<FieldType>>,
 }
 
 impl HppElement {
@@ -288,6 +300,516 @@ impl HppElement {
 
         return stdvector_element;
     }
+
+    pub fn new_stdmap_class_element(field_type: &FieldType) -> Self {
+        let key_type_name = field_type.get_key_type_str();
+        let value_type_name = field_type.get_value_type_str();
+
+        let mut stdmap_class = Class::default();
+        stdmap_class.type_str = format!("StdMap_{}_{}", key_type_name, value_type_name);
+        stdmap_class.class_type = ClassType::StdMap;
+        stdmap_class.key_type = field_type.key_type.clone();
+        stdmap_class.value_type = field_type.value_type.clone();
+        let mut stdmap_element = HppElement::Class(stdmap_class);
+        
+        // StdMap class 的构造函数
+        let constructor_method = Method {
+            method_type: MethodType::Constructor,
+            name: "Constructor".to_string(),
+            return_type: field_type.clone(),
+            ..Default::default()
+        };
+        stdmap_element.add_child(HppElement::Method(constructor_method));
+        
+        // StdMap class 的析构函数
+        stdmap_element.ensure_destructor();
+        
+        // size 方法
+        let size_method = Method {
+            method_type: MethodType::Normal,
+            name: "size".to_string(),
+            return_type: FieldType {
+                full_str: "int".to_string(),
+                type_str: "int".to_string(),
+                type_kind: TypeKind::Int64,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        stdmap_element.add_child(HppElement::Method(size_method));
+        
+        // insert 方法
+        let insert_method = Method {
+            method_type: MethodType::Normal,
+            name: "insert".to_string(),
+            return_type: FieldType {
+                full_str: "void".to_string(),
+                type_str: "void".to_string(),
+                type_kind: TypeKind::Void,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            params: vec![
+                MethodParam {
+                    name: "key".to_string(),
+                    field_type: (**field_type.key_type.as_ref().unwrap()).clone(),
+                },
+                MethodParam {
+                    name: "value".to_string(),
+                    field_type: (**field_type.value_type.as_ref().unwrap()).clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        stdmap_element.add_child(HppElement::Method(insert_method));
+        
+        // find 方法
+        let find_method = Method {
+            method_type: MethodType::Normal,
+            name: "find".to_string(),
+            return_type: (**field_type.value_type.as_ref().unwrap()).clone(),
+            params: vec![
+                MethodParam {
+                    name: "key".to_string(),
+                    field_type: (**field_type.key_type.as_ref().unwrap()).clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        stdmap_element.add_child(HppElement::Method(find_method));
+        
+        // count 方法 (替代 contains，更兼容)
+        let count_method = Method {
+            method_type: MethodType::Normal,
+            name: "count".to_string(),
+            return_type: FieldType {
+                full_str: "int".to_string(),
+                type_str: "int".to_string(),
+                type_kind: TypeKind::Int64,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            params: vec![
+                MethodParam {
+                    name: "key".to_string(),
+                    field_type: (**field_type.key_type.as_ref().unwrap()).clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        stdmap_element.add_child(HppElement::Method(count_method));
+        
+        // erase 方法
+        let erase_method = Method {
+            method_type: MethodType::Normal,
+            name: "erase".to_string(),
+            return_type: FieldType {
+                full_str: "void".to_string(),
+                type_str: "void".to_string(),
+                type_kind: TypeKind::Void,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            params: vec![
+                MethodParam {
+                    name: "key".to_string(),
+                    field_type: (**field_type.key_type.as_ref().unwrap()).clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        stdmap_element.add_child(HppElement::Method(erase_method));
+        
+        // clear 方法
+        let clear_method = Method {
+            method_type: MethodType::Normal,
+            name: "clear".to_string(),
+            return_type: FieldType {
+                full_str: "void".to_string(),
+                type_str: "void".to_string(),
+                type_kind: TypeKind::Void,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        stdmap_element.add_child(HppElement::Method(clear_method));
+
+        return stdmap_element;
+    }
+
+    pub fn new_stdunorderedmap_class_element(field_type: &FieldType) -> Self {
+        let key_type_name = field_type.get_key_type_str();
+        let value_type_name = field_type.get_value_type_str();
+
+        let mut stdunorderedmap_class = Class::default();
+        stdunorderedmap_class.type_str = format!("StdUnorderedMap_{}_{}", key_type_name, value_type_name);
+        stdunorderedmap_class.class_type = ClassType::StdUnorderedMap;
+        stdunorderedmap_class.key_type = field_type.key_type.clone();
+        stdunorderedmap_class.value_type = field_type.value_type.clone();
+        let mut stdunorderedmap_element = HppElement::Class(stdunorderedmap_class);
+        
+        // StdUnorderedMap class 的构造函数
+        let constructor_method = Method {
+            method_type: MethodType::Constructor,
+            name: "Constructor".to_string(),
+            return_type: field_type.clone(),
+            ..Default::default()
+        };
+        stdunorderedmap_element.add_child(HppElement::Method(constructor_method));
+        
+        // StdUnorderedMap class 的析构函数
+        stdunorderedmap_element.ensure_destructor();
+        
+        // size 方法
+        let size_method = Method {
+            method_type: MethodType::Normal,
+            name: "size".to_string(),
+            return_type: FieldType {
+                full_str: "int".to_string(),
+                type_str: "int".to_string(),
+                type_kind: TypeKind::Int64,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        stdunorderedmap_element.add_child(HppElement::Method(size_method));
+        
+        // insert 方法
+        let insert_method = Method {
+            method_type: MethodType::Normal,
+            name: "insert".to_string(),
+            return_type: FieldType {
+                full_str: "void".to_string(),
+                type_str: "void".to_string(),
+                type_kind: TypeKind::Void,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            params: vec![
+                MethodParam {
+                    name: "key".to_string(),
+                    field_type: (**field_type.key_type.as_ref().unwrap()).clone(),
+                },
+                MethodParam {
+                    name: "value".to_string(),
+                    field_type: (**field_type.value_type.as_ref().unwrap()).clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        stdunorderedmap_element.add_child(HppElement::Method(insert_method));
+        
+        // find 方法
+        let find_method = Method {
+            method_type: MethodType::Normal,
+            name: "find".to_string(),
+            return_type: (**field_type.value_type.as_ref().unwrap()).clone(),
+            params: vec![
+                MethodParam {
+                    name: "key".to_string(),
+                    field_type: (**field_type.key_type.as_ref().unwrap()).clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        stdunorderedmap_element.add_child(HppElement::Method(find_method));
+        
+        // count 方法 (替代 contains，更兼容)
+        let count_method = Method {
+            method_type: MethodType::Normal,
+            name: "count".to_string(),
+            return_type: FieldType {
+                full_str: "int".to_string(),
+                type_str: "int".to_string(),
+                type_kind: TypeKind::Int64,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            params: vec![
+                MethodParam {
+                    name: "key".to_string(),
+                    field_type: (**field_type.key_type.as_ref().unwrap()).clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        stdunorderedmap_element.add_child(HppElement::Method(count_method));
+        
+        // erase 方法
+        let erase_method = Method {
+            method_type: MethodType::Normal,
+            name: "erase".to_string(),
+            return_type: FieldType {
+                full_str: "void".to_string(),
+                type_str: "void".to_string(),
+                type_kind: TypeKind::Void,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            params: vec![
+                MethodParam {
+                    name: "key".to_string(),
+                    field_type: (**field_type.key_type.as_ref().unwrap()).clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        stdunorderedmap_element.add_child(HppElement::Method(erase_method));
+        
+        // clear 方法
+        let clear_method = Method {
+            method_type: MethodType::Normal,
+            name: "clear".to_string(),
+            return_type: FieldType {
+                full_str: "void".to_string(),
+                type_str: "void".to_string(),
+                type_kind: TypeKind::Void,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        stdunorderedmap_element.add_child(HppElement::Method(clear_method));
+
+        return stdunorderedmap_element;
+    }
+
+    pub fn new_stdset_class_element(field_type: &FieldType) -> Self {
+        let value_type_name = field_type.get_value_type_str();
+
+        let mut stdset_class = Class::default();
+        stdset_class.type_str = format!("StdSet_{}", value_type_name);
+        stdset_class.class_type = ClassType::StdSet;
+        stdset_class.value_type = field_type.value_type.clone();
+        let mut stdset_element = HppElement::Class(stdset_class);
+        
+        // StdSet class 的构造函数
+        let constructor_method = Method {
+            method_type: MethodType::Constructor,
+            name: "Constructor".to_string(),
+            return_type: field_type.clone(),
+            ..Default::default()
+        };
+        stdset_element.add_child(HppElement::Method(constructor_method));
+        
+        // StdSet class 的析构函数
+        stdset_element.ensure_destructor();
+        
+        // size 方法
+        let size_method = Method {
+            method_type: MethodType::Normal,
+            name: "size".to_string(),
+            return_type: FieldType {
+                full_str: "int".to_string(),
+                type_str: "int".to_string(),
+                type_kind: TypeKind::Int64,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        stdset_element.add_child(HppElement::Method(size_method));
+        
+        // insert 方法
+        let insert_method = Method {
+            method_type: MethodType::Normal,
+            name: "insert".to_string(),
+            return_type: FieldType {
+                full_str: "void".to_string(),
+                type_str: "void".to_string(),
+                type_kind: TypeKind::Void,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            params: vec![
+                MethodParam {
+                    name: "value".to_string(),
+                    field_type: (**field_type.value_type.as_ref().unwrap()).clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        stdset_element.add_child(HppElement::Method(insert_method));
+        
+        // count 方法 (替代 contains，更兼容)
+        let count_method = Method {
+            method_type: MethodType::Normal,
+            name: "count".to_string(),
+            return_type: FieldType {
+                full_str: "int".to_string(),
+                type_str: "int".to_string(),
+                type_kind: TypeKind::Int64,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            params: vec![
+                MethodParam {
+                    name: "value".to_string(),
+                    field_type: (**field_type.value_type.as_ref().unwrap()).clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        stdset_element.add_child(HppElement::Method(count_method));
+        
+        // erase 方法
+        let erase_method = Method {
+            method_type: MethodType::Normal,
+            name: "erase".to_string(),
+            return_type: FieldType {
+                full_str: "void".to_string(),
+                type_str: "void".to_string(),
+                type_kind: TypeKind::Void,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            params: vec![
+                MethodParam {
+                    name: "value".to_string(),
+                    field_type: (**field_type.value_type.as_ref().unwrap()).clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        stdset_element.add_child(HppElement::Method(erase_method));
+        
+        // clear 方法
+        let clear_method = Method {
+            method_type: MethodType::Normal,
+            name: "clear".to_string(),
+            return_type: FieldType {
+                full_str: "void".to_string(),
+                type_str: "void".to_string(),
+                type_kind: TypeKind::Void,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        stdset_element.add_child(HppElement::Method(clear_method));
+
+        return stdset_element;
+    }
+
+    pub fn new_stdunorderedset_class_element(field_type: &FieldType) -> Self {
+        let value_type_name = field_type.get_value_type_str();
+
+        let mut stdunorderedset_class = Class::default();
+        stdunorderedset_class.type_str = format!("StdUnorderedSet_{}", value_type_name);
+        stdunorderedset_class.class_type = ClassType::StdUnorderedSet;
+        stdunorderedset_class.value_type = field_type.value_type.clone();
+        let mut stdunorderedset_element = HppElement::Class(stdunorderedset_class);
+        
+        // StdUnorderedSet class 的构造函数
+        let constructor_method = Method {
+            method_type: MethodType::Constructor,
+            name: "Constructor".to_string(),
+            return_type: field_type.clone(),
+            ..Default::default()
+        };
+        stdunorderedset_element.add_child(HppElement::Method(constructor_method));
+        
+        // StdUnorderedSet class 的析构函数
+        stdunorderedset_element.ensure_destructor();
+        
+        // size 方法
+        let size_method = Method {
+            method_type: MethodType::Normal,
+            name: "size".to_string(),
+            return_type: FieldType {
+                full_str: "int".to_string(),
+                type_str: "int".to_string(),
+                type_kind: TypeKind::Int64,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        stdunorderedset_element.add_child(HppElement::Method(size_method));
+        
+        // insert 方法
+        let insert_method = Method {
+            method_type: MethodType::Normal,
+            name: "insert".to_string(),
+            return_type: FieldType {
+                full_str: "void".to_string(),
+                type_str: "void".to_string(),
+                type_kind: TypeKind::Void,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            params: vec![
+                MethodParam {
+                    name: "value".to_string(),
+                    field_type: (**field_type.value_type.as_ref().unwrap()).clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        stdunorderedset_element.add_child(HppElement::Method(insert_method));
+        
+        // count 方法 (替代 contains，更兼容)
+        let count_method = Method {
+            method_type: MethodType::Normal,
+            name: "count".to_string(),
+            return_type: FieldType {
+                full_str: "int".to_string(),
+                type_str: "int".to_string(),
+                type_kind: TypeKind::Int64,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            params: vec![
+                MethodParam {
+                    name: "value".to_string(),
+                    field_type: (**field_type.value_type.as_ref().unwrap()).clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        stdunorderedset_element.add_child(HppElement::Method(count_method));
+        
+        // erase 方法
+        let erase_method = Method {
+            method_type: MethodType::Normal,
+            name: "erase".to_string(),
+            return_type: FieldType {
+                full_str: "void".to_string(),
+                type_str: "void".to_string(),
+                type_kind: TypeKind::Void,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            params: vec![
+                MethodParam {
+                    name: "value".to_string(),
+                    field_type: (**field_type.value_type.as_ref().unwrap()).clone(),
+                },
+            ],
+            ..Default::default()
+        };
+        stdunorderedset_element.add_child(HppElement::Method(erase_method));
+        
+        // clear 方法
+        let clear_method = Method {
+            method_type: MethodType::Normal,
+            name: "clear".to_string(),
+            return_type: FieldType {
+                full_str: "void".to_string(),
+                type_str: "void".to_string(),
+                type_kind: TypeKind::Void,
+                ptr_level: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        stdunorderedset_element.add_child(HppElement::Method(clear_method));
+
+        return stdunorderedset_element;
+    }
 }
 
 impl fmt::Debug for HppElement {
@@ -403,6 +925,66 @@ impl FieldType {
             field_type.value_type = Some(Box::new(value_type));
             return field_type;
         }
+        // std::map
+        else if lower_full_str.starts_with("std::map") {
+            field_type.type_kind = TypeKind::StdMap;
+            field_type.type_str = display_name.clone();
+
+            let template_args = clang_type.unwrap().get_template_argument_types().unwrap_or_default();
+            if template_args.len() >= 2 {
+                let key_clang_type = template_args.get(0).unwrap();
+                let value_clang_type = template_args.get(1).unwrap();
+                
+                let key_type = FieldType::from_clang_type(key_clang_type);
+                let value_type = FieldType::from_clang_type(value_clang_type);
+
+                field_type.key_type = Some(Box::new(key_type));
+                field_type.value_type = Some(Box::new(value_type));
+            }
+            return field_type;
+        }
+        // std::unordered_map
+        else if lower_full_str.starts_with("std::unordered_map") {
+            field_type.type_kind = TypeKind::StdUnorderedMap;
+            field_type.type_str = display_name.clone();
+
+            let template_args = clang_type.unwrap().get_template_argument_types().unwrap_or_default();
+            if template_args.len() >= 2 {
+                let key_clang_type = template_args.get(0).unwrap();
+                let value_clang_type = template_args.get(1).unwrap();
+                
+                let key_type = FieldType::from_clang_type(key_clang_type);
+                let value_type = FieldType::from_clang_type(value_clang_type);
+
+                field_type.key_type = Some(Box::new(key_type));
+                field_type.value_type = Some(Box::new(value_type));
+            }
+            return field_type;
+        }
+        // std::set
+        else if lower_full_str.starts_with("std::set") {
+            field_type.type_kind = TypeKind::StdSet;
+            field_type.type_str = display_name.clone();
+
+            let template_args = clang_type.unwrap().get_template_argument_types().unwrap_or_default();
+            let value_clang_type = template_args.first().unwrap();
+            let value_type = FieldType::from_clang_type(value_clang_type);
+
+            field_type.value_type = Some(Box::new(value_type));
+            return field_type;
+        }
+        // std::unordered_set
+        else if lower_full_str.starts_with("std::unordered_set") {
+            field_type.type_kind = TypeKind::StdUnorderedSet;
+            field_type.type_str = display_name.clone();
+
+            let template_args = clang_type.unwrap().get_template_argument_types().unwrap_or_default();
+            let value_clang_type = template_args.first().unwrap();
+            let value_type = FieldType::from_clang_type(value_clang_type);
+
+            field_type.value_type = Some(Box::new(value_type));
+            return field_type;
+        }
 
         // 计算指针级别
         if field_type.ptr_level == 0 {
@@ -475,6 +1057,18 @@ impl FieldType {
             return format!("StdPtr_{}", value_type.type_str);
         } else {
             return value_type.type_str.clone();
+        }
+    }
+
+    pub fn get_key_type_str(&self) -> String {
+        if (self.key_type.is_none()) {
+            return "".to_string();
+        }
+        let key_type = self.key_type.as_ref().unwrap();
+        if key_type.type_kind == TypeKind::StdPtr {
+            return format!("StdPtr_{}", key_type.type_str);
+        } else {
+            return key_type.type_str.clone();
         }
     }
 }

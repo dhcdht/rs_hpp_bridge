@@ -148,15 +148,39 @@ void TestClass::processSharedStruct(std::shared_ptr<SimpleStruct> s_ptr) {
     }
 }
 
-// // Map implementations
-// std::map<std::string, int> TestClass::getMap() {
-//     std::cout << "C++: Creating and returning std::map<std::string, int>." << std::endl;
-//     return {{"apple", 1}, {"banana", 2}, {"cherry", 3}};
-// }
+// Map and Set implementations
+std::map<std::string, int> TestClass::testStdMap(std::map<int, std::string> m) {
+    std::cout << "C++: Testing std::map<int, std::string> -> std::map<std::string, int>" << std::endl;
+    std::map<std::string, int> result;
+    for (const auto& pair : m) {
+        result[pair.second] = pair.first;
+    }
+    return result;
+}
 
-// void TestClass::processMap(const std::map<std::string, int>& map_data) {
-//     std::cout << "C++: Processing std::map<std::string, int>:" << std::endl;
-//     for (const auto& pair : map_data) {
-//         std::cout << "  {\"" << pair.first << "\": " << pair.second << "}" << std::endl;
-//     }
-// }
+std::unordered_map<int, std::string> TestClass::testStdUnorderedMap(std::unordered_map<std::string, int> m) {
+    std::cout << "C++: Testing std::unordered_map<std::string, int> -> std::unordered_map<int, std::string>" << std::endl;
+    std::unordered_map<int, std::string> result;
+    for (const auto& pair : m) {
+        result[pair.second] = pair.first;
+    }
+    return result;
+}
+
+std::set<int> TestClass::testStdSet(std::set<std::string> s) {
+    std::cout << "C++: Testing std::set<std::string> -> std::set<int>" << std::endl;
+    std::set<int> result;
+    for (const auto& str : s) {
+        result.insert(static_cast<int>(str.length()));
+    }
+    return result;
+}
+
+std::unordered_set<std::string> TestClass::testStdUnorderedSet(std::unordered_set<int> s) {
+    std::cout << "C++: Testing std::unordered_set<int> -> std::unordered_set<std::string>" << std::endl;
+    std::unordered_set<std::string> result;
+    for (const auto& num : s) {
+        result.insert(std::to_string(num));
+    }
+    return result;
+}
