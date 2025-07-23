@@ -383,7 +383,7 @@ fn get_str_dart_fun_body(class: Option<&Class>, method: &Method) -> String {
             }
         }
         MethodType::Destructor => {
-            body_prefix.push_str(&format!("return {}(", ffiapi_c_method_name));
+            body_prefix.push_str(&format!("nativeLifecycleUnlink();\n\t\treturn {}(", ffiapi_c_method_name));
             body_suffix.push_str(");");
         }
         _ => {
@@ -496,7 +496,7 @@ fn get_str_dart_fun_body_for_callback(class: Option<&Class>, method: &Method) ->
         _{}_init();", cur_class_name, cur_class_name));
         }
         MethodType::Destructor => {
-            body_prefix.push_str(&format!("return {}(", ffiapi_c_method_name));
+            body_prefix.push_str(&format!("nativeLifecycleUnlink();\n\t\treturn {}(", ffiapi_c_method_name));
             body_suffix.push_str(");");
         }
         _ => {
