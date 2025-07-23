@@ -1000,7 +1000,17 @@ impl FieldType {
             }
             "int" | "int64_t" | "size_t" | "uint64_t" => {
                 field_type.type_kind = TypeKind::Int64;
-                field_type.type_str = "int".to_string();
+                match lower_full_str_without_ptr {                
+                    "int64_t" | "size_t" | "uint64_t" => {
+                        field_type.type_str = "int64_t".to_string();
+                    }
+                    "int" => {
+                        field_type.type_str = "int".to_string();
+                    }
+                    _ => {
+                        field_type.type_str = "int".to_string();
+                    }
+                }
             }
             "float" => {
                 field_type.type_kind = TypeKind::Float;
