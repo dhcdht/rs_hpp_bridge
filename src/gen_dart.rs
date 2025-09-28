@@ -345,6 +345,16 @@ fn get_str_dart_fun_body(class: Option<&Class>, method: &Method) -> String {
     let ffiapi_c_method_name = format!("ffi_{}_{}", cur_class_name, method.name);
     let params_str = get_str_dart_fun_params_impl(class, method);
 
+    // 仅对非回调类的方法（包括普通/构造/析构）处理字符串参数内存释放
+    let mut string_params: Vec<String> = Vec::new();
+    if !class_is_callback {
+        for param in &method.params {
+            if param.field_type.type_kind == TypeKind::String {
+                string_params.push(param.name.clone());
+            }
+        }
+    }
+
     let mut body_prefix = "".to_string();
     let mut body_suffix = "".to_string();
     match method.method_type {
@@ -386,15 +396,32 @@ fn get_str_dart_fun_body(class: Option<&Class>, method: &Method) -> String {
             body_prefix.push_str(&format!("nativeLifecycleUnlink();\n\t\treturn {}(", ffiapi_c_method_name));
             body_suffix.push_str(");");
         }
-        _ => {
-            unimplemented!("gen_dart_api: unknown method type")
-        }
     }
 
-    let fun_body = format!("{}{}{}", 
-        body_prefix, params_str, body_suffix);
+    let core_body = format!("{}{}{}", body_prefix, params_str, body_suffix);
 
-    return fun_body;
+    // 如果没有字符串参数，保持原样
+    if string_params.is_empty() {
+        return core_body;
+    }
+
+    // 有字符串参数：生成 _c_param 变量、try/finally 释放
+    // params_str 中针对字符串参数会使用占位符 _c_<name>
+    let alloc_lines: Vec<String> = string_params.iter().map(|n| format!("final _c_{} = {}.toNativeUtf8();", n, n)).collect();
+    let free_lines: Vec<String> = string_params.iter().map(|n| format!("malloc.free(_c_{});", n)).collect();
+    // 保持最小侵入：不改变 core_body 内容，仅包裹
+    let wrapped = format!("{}
+        try {{
+            {}
+        }} finally {{
+            {}
+        }}",
+        alloc_lines.join("\n\t\t"),
+        core_body,
+        free_lines.join("\n\t\t\t")
+    );
+
+    return wrapped;
 }
 
 fn get_str_dart_fun_callback_block(class: Option<&Class>, method: &Method) -> String {
@@ -551,7 +578,8 @@ fn get_str_dart_fun_params_impl(class: Option<&Class>, method: &Method) -> Strin
             param_strs.push(format!("{}.getNativePtr()", param.name));
         }
         else if param.field_type.type_kind == TypeKind::String {
-            param_strs.push(format!("{}.toNativeUtf8()", param.name))
+            // 使用占位符变量，实际分配在 get_str_dart_fun_body 中完成
+            param_strs.push(format!("_c_{}", param.name));
         }
         else {
             param_strs.push(format!("{}", param.name));
