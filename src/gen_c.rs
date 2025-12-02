@@ -78,6 +78,7 @@ extern \"C\" {{
 #include \"{}\"
 #include \"dart_api_dl.h\"
 #include <set>
+#include <mutex>
 
 extern \"C\" {{
 
@@ -390,7 +391,15 @@ fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> Strin
         args.type = Dart_CObject_kArray;
         args.value.as_array.length = {};
         args.value.as_array.values = values;
-        for (const auto& item : {}) {{
+        
+        // 创建临时副本以避免在持有锁时调用 Dart API
+        std::set<int64_t> callbackPorts;
+        {{
+            std::lock_guard<std::mutex> lock(get{}Mutex());
+            callbackPorts = get{}Set();
+        }}
+        
+        for (const auto& item : callbackPorts) {{
             Dart_PostCObject_DL((Dart_Port_DL)item, &args);
         }}
 }};
@@ -399,6 +408,7 @@ fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> Strin
         gen_values_str,
         values_str,
         args_num,
+        fun_ptr_var_str,
         fun_ptr_var_str,
     );
 
@@ -504,15 +514,35 @@ API_EXPORT void {}_regist(int64_t {});
     );
 
     // .cpp中的函数指针变量定义
-    // 1. 注册函数指针的实现
-    let regist_var_decl = format!("static std::set<int64_t> {} = {{}};\n", fun_ptr_var_str);
+    // 使用函数内静态变量确保线程安全的初始化（Meyer's Singleton）
+    let regist_var_decl = format!("// 使用函数内静态变量确保线程安全的初始化
+static std::set<int64_t>& get{}Set() {{
+    static std::set<int64_t> callbackSet;
+    return callbackSet;
+}}
+
+static std::mutex& get{}Mutex() {{
+    static std::mutex callbackMutex;
+    return callbackMutex;
+}}
+
+", fun_ptr_var_str, fun_ptr_var_str);
 
     // .cpp中的注册函数实现
     let regist_impl = format!("API_EXPORT void {}_regist(int64_t {}){{
-    {}.insert({});
+    // 参数校验：确保 port 有效（Dart port 通常不会是 0）
+    if ({} == 0) {{
+        return;
+    }}
+    
+    // 使用互斥锁保护 set 的访问，防止多线程竞争导致内部结构损坏
+    std::lock_guard<std::mutex> lock(get{}Mutex());
+    get{}Set().insert({});
 }};
 ", 
     fun_ptr_type_str, method.name, 
+    method.name,
+    fun_ptr_var_str,
     fun_ptr_var_str, method.name,
 );
 
