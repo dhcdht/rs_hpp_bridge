@@ -12,6 +12,7 @@ pub enum HppElement {
     Class(Class),
     Method(Method),
     Field(Field),
+    Enum(Enum),
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -84,6 +85,17 @@ pub struct Field {
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
+pub struct Enum {
+    pub name: String,
+    /// true = enum class (scoped), false = 普通 enum
+    pub is_scoped: bool,
+    /// 枚举值列表：(名称, 数值)
+    pub values: Vec<(String, i64)>,
+    /// 注释
+    pub comment_str: Option<String>,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct MethodParam {
     pub name: String,
     pub field_type: FieldType,
@@ -103,6 +115,7 @@ pub enum TypeKind {
     String,
 
     Class,
+    Enum,
     StdPtr,
     StdVector,
     StdMap,
@@ -819,6 +832,7 @@ impl fmt::Debug for HppElement {
             Self::Class(arg0) => arg0.fmt(f),
             Self::Method(arg0) => arg0.fmt(f),
             Self::Field(arg0) => arg0.fmt(f),
+            Self::Enum(arg0) => arg0.fmt(f),
         }
     }
 }

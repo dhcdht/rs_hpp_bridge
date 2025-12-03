@@ -83,6 +83,7 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
 
     match entity.get_kind() {
         clang::EntityKind::ClassDecl | clang::EntityKind::StructDecl => handle_clang_ClassDecl(out_hpp_element, entity, indent),
+        clang::EntityKind::EnumDecl => handle_clang_EnumDecl(out_hpp_element, entity, indent),
         clang::EntityKind::Constructor => handle_clang_Constructor(out_hpp_element, entity, indent),
         clang::EntityKind::Destructor => handle_clang_Destructor(out_hpp_element, entity),
         clang::EntityKind::Method => handle_clang_Method(out_hpp_element, entity, indent),
@@ -720,4 +721,52 @@ fn handle_clang_FunctionDecl(out_hpp_element: &mut HppElement, entity: &clang::E
         visit_parse_clang_entity(&mut element, &child, indent + 1);
     }
     out_hpp_element.add_child(element);
+}
+
+fn handle_clang_EnumDecl(out_hpp_element: &mut HppElement, entity: &clang::Entity<'_>, _indent: usize) {
+    // 如果是前向声明，跳过
+    if !entity.is_definition() {
+        return;
+    }
+
+    // 定义不是在当前文件，而是被 include 时，不在这个文件中处理它的桥接生成
+    match out_hpp_element {
+        HppElement::File(file) => {
+            if file.path != entity.get_location().unwrap().get_presumed_location().0 {
+                return;
+            }
+        }
+        _ => {
+        }
+    }
+
+    let name = entity.get_name().unwrap_or_default();
+    if name.is_empty() {
+        return; // 匿名 enum，跳过
+    }
+
+    // 检查是否为 enum class（scoped enum）
+    let is_scoped = entity.is_scoped();
+
+    let mut values = Vec::new();
+
+    // 遍历 enum 的子节点，提取枚举值
+    for child in entity.get_children() {
+        if child.get_kind() == clang::EntityKind::EnumConstantDecl {
+            if let Some(const_name) = child.get_name() {
+                // 获取枚举值的整数值
+                let value = child.get_enum_constant_value().map(|(val, _)| val).unwrap_or(0);
+                values.push((const_name, value));
+            }
+        }
+    }
+
+    let enum_def = Enum {
+        name,
+        is_scoped,
+        values,
+        comment_str: entity.get_comment(),
+    };
+
+    out_hpp_element.add_child(HppElement::Enum(enum_def));
 }

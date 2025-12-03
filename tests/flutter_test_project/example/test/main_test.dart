@@ -337,23 +337,38 @@ void main() {
     test('test SimpleA class', () async {
       // Test SimpleA constructor and basic methods
       final simpleA = SimpleA.Constructor_int_String(1, "TestA");
-      
+
       expect(simpleA.getId(), 1);
       expect(simpleA.getName(), "TestA");
-      
+
       // Test name setter
       simpleA.setName("UpdatedA");
       expect(simpleA.getName(), "UpdatedA");
-      
+
       // Test Point interaction
       final point = Point.Constructor();
       point.set_x(100);
       point.set_y(200);
       simpleA.setPosition(point);
-      
+
       final retrievedPoint = simpleA.getPosition();
       expect(retrievedPoint.get_x(), 100);
       expect(retrievedPoint.get_y(), 200);
+
+      // Test Color enum
+      simpleA.setColor(Color.red.value);
+      expect(simpleA.getColor(), Color.red.value);
+
+      simpleA.setColor(Color.green.value);
+      expect(simpleA.getColor(), Color.green.value);
+
+      simpleA.setColor(Color.blue.value);
+      expect(simpleA.getColor(), Color.blue.value);
+
+      // Test fromValue conversion
+      final colorValue = simpleA.getColor();
+      final color = Color.fromValue(colorValue);
+      expect(color, Color.blue);
     });
 
     test('test SimpleB class', () async {

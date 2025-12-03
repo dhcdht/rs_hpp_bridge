@@ -22,7 +22,8 @@
 - [x] struct
 - [x] 对象生命周期，上下协调一致共用
 - [x] shared_ptr
+- [x] enum / enum class
 - [x] stl
     - [x] std::vector
-    - [x] std::map std::uunordered_map
+    - [x] std::map std::unordered_map
     - [x] std::set std::unordered_set

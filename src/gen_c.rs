@@ -104,6 +104,10 @@ extern \"C\" {{
             HppElement::Method(method) => {
                 gen_c_class_method(&mut c_context, None, method);
             }
+            // Enum 类型
+            HppElement::Enum(enum_def) => {
+                gen_c_enum(&mut c_context, enum_def);
+            }
             _ => {
                 unimplemented!("gen_c_file: unknown child, {:?}", child);
             }
@@ -1072,6 +1076,9 @@ fn collect_element_referenced_types(element: &HppElement, typedef_names: &mut Ve
         HppElement::Field(field) => {
             // 处理字段类型
             collect_field_type(&field.field_type, typedef_names);
+        },
+        HppElement::Enum(_enum) => {
+            // Enum 不需要收集引用类型，它本身就是类型定义
         }
     }
 }
@@ -1181,4 +1188,20 @@ fn collect_field_type(field_type: &FieldType, typedef_names: &mut Vec<String>) {
         },
         _ => {} // 其他基本类型不需要特殊处理
     }
+}
+
+/// 为 enum 生成 C FFI 代码
+fn gen_c_enum(_c_context: &mut CFileContext, enum_def: &Enum) {
+    // Enum 在 C++ 层面就是整数类型，不需要生成额外的 FFI 函数
+    // 只需要确保 C++ 头文件中有 enum 定义即可
+    //
+    // 注意：由于我们生成的 _ffi.h 文件会被 _ffi.cpp 包含，
+    // 而 _ffi.cpp 又会包含原始的 .hpp 文件，
+    // 所以 enum 定义会自动可用，无需在此生成
+    //
+    // 如果将来需要在 FFI 层做类型检查或转换，可以在这里添加
+
+    // 暂时不生成任何代码
+    // 可以在这里添加注释说明这个 enum 已被处理
+    let _ = enum_def; // 标记为已使用，避免编译警告
 }

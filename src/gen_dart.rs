@@ -199,6 +199,13 @@ class {} implements Finalizable {{
             let set_method_str = get_str_dart_fun(local_dart_gen_context.cur_class, &set_method);
             dart_file.write(format!("{}\n{}\n", get_method_str, set_method_str).as_bytes());
         }
+        HppElement::Enum(enum_def) => {
+            let local_dart_gen_context = dart_gen_context.unwrap();
+            let dart_file = local_dart_gen_context.cur_file.as_mut().unwrap();
+
+            let enum_code = gen_dart_enum(enum_def);
+            dart_file.write(enum_code.as_bytes());
+        }
         _ => {
             unimplemented!("gen_dart_api: unknown child");
         }
@@ -267,6 +274,10 @@ import '{}';
             let set_method = Method::new_set_for_field(field);
             let set_method_str = get_str_dart_api(gen_context, local_ffiapi_gen_context.cur_class, &set_method);
             ffiapi_file.write(format!("{}\n{}\n", get_method_str, set_method_str).as_bytes());
+        }
+        HppElement::Enum(_enum_def) => {
+            // Enum 不需要生成 FFI API，因为它们就是整数类型
+            // 在 Dart 层已经通过 enum 类定义处理了类型转换
         }
         _ => {
             unimplemented!("gen_dart_ffiapi: unknown child");
@@ -1125,6 +1136,10 @@ fn element_contains_type(element: &HppElement, type_name: &str) -> bool {
             // 字段和方法不定义类型，只引用类型
             return false;
         },
+        HppElement::Enum(enum_def) => {
+            // 检查 enum 名称是否匹配
+            return enum_def.name == type_name;
+        },
         HppElement::File(file) => {
             // 递归检查文件中的子元素
             for child in &file.children {
@@ -1317,4 +1332,97 @@ fn generate_stdunorderedset_convenience_methods(class: &Class) -> String {
         value_dart_type,
         value_dart_type
     )
+}
+
+/// 生成 Dart enum 代码
+fn gen_dart_enum(enum_def: &Enum) -> String {
+    let comment = enum_def.comment_str.as_ref().map(|c| format!("{}\n", c)).unwrap_or_default();
+
+    if enum_def.is_scoped {
+        // enum class → 生成 Dart enum（强类型）
+        gen_dart_scoped_enum(enum_def, &comment)
+    } else {
+        // 普通 enum → 生成 class + static const（兼容）
+        gen_dart_unscoped_enum(enum_def, &comment)
+    }
+}
+
+/// 为 enum class 生成 Dart enum
+fn gen_dart_scoped_enum(enum_def: &Enum, comment: &str) -> String {
+    let mut enum_values = Vec::new();
+
+    for (name, value) in &enum_def.values {
+        // 转换为 lowerCamelCase（Dart 枚举值规范）
+        let dart_name = to_lower_camel_case(name);
+        enum_values.push(format!("  {}({})", dart_name, value));
+    }
+
+    format!(
+r#"{}enum {} {{
+{};
+
+  final int value;
+  const {}(this.value);
+
+  static {}? fromValue(int value) {{
+    try {{
+      return {}.values.firstWhere(
+        (e) => e.value == value,
+      );
+    }} catch (_) {{
+      return null;
+    }}
+  }}
+}}
+
+"#,
+        comment,
+        enum_def.name,
+        enum_values.join(",\n"),
+        enum_def.name,
+        enum_def.name,
+        enum_def.name
+    )
+}
+
+/// 为普通 enum 生成 Dart class
+fn gen_dart_unscoped_enum(enum_def: &Enum, comment: &str) -> String {
+    let mut const_values = Vec::new();
+
+    for (name, value) in &enum_def.values {
+        // 普通 enum 的值名称保持 UPPER_CASE
+        const_values.push(format!("  static const int {} = {};", name, value));
+    }
+
+    format!(
+r#"{}// 注意：这是普通 enum，建议在 C++ 中改为 enum class
+class {} {{
+{}
+}}
+
+"#,
+        comment,
+        enum_def.name,
+        const_values.join("\n")
+    )
+}
+
+/// 将字符串转换为 lowerCamelCase
+fn to_lower_camel_case(s: &str) -> String {
+    let parts: Vec<&str> = s.split('_').collect();
+    if parts.is_empty() {
+        return s.to_lowercase();
+    }
+
+    let mut result = parts[0].to_lowercase();
+    for part in &parts[1..] {
+        if !part.is_empty() {
+            let mut chars = part.chars();
+            if let Some(first) = chars.next() {
+                result.push(first.to_uppercase().next().unwrap());
+                result.push_str(&chars.as_str().to_lowercase());
+            }
+        }
+    }
+    result
 }
