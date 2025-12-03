@@ -23,56 +23,86 @@ struct Args {
 }
 
 fn main() {
-    let args = Args::parse();
-    // println!("{:#?}", args);
+    if let Err(e) = run() {
+        eprintln!("错误: {}", e);
 
+        // 如果设置了 RUST_BACKTRACE 环境变量，显示更详细的信息
+        if !std::env::var("RUST_BACKTRACE").is_ok() {
+            eprintln!("\n提示: 设置环境变量 RUST_BACKTRACE=1 可以查看详细堆栈信息");
+        }
+
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), String> {
+    let args = Args::parse();
+
+    // 读取输入文件
+    let content = fs::read_to_string(&args.input)
+        .map_err(|e| format!("无法读取输入文件 '{}': {}", args.input, e))?;
+
+    // 解析 %include 指令
     let mut input_content_files = vec![];
-    if !args.input.is_empty() {
-        match fs::read_to_string(&args.input) {
-            Ok(content) => {
-                for line in content.lines() {
-                    if line.trim_start().starts_with("%include") && !line.trim_end().ends_with(".i\"") {
-                        let start_quote = line.find('"');
-                        let end_quote = line.rfind('"');
-                        if let (Some(start), Some(end)) = (start_quote, end_quote) {
-                            if start < end {
-                                let file_path = line[start + 1..end].to_string();
-                                input_content_files.push(file_path);
-                            }
-                        }
-                    }
+    for line in content.lines() {
+        if line.trim_start().starts_with("%include") && !line.trim_end().ends_with(".i\"") {
+            if let (Some(start), Some(end)) = (line.find('"'), line.rfind('"')) {
+                if start < end {
+                    input_content_files.push(line[start + 1..end].to_string());
                 }
             }
-            Err(err) => eprintln!("Error reading file {}: {}", args.input, err),
         }
     }
+
+    if input_content_files.is_empty() {
+        return Err(format!("输入文件 '{}' 中没有找到任何 %include 指令", args.input));
+    }
+
     let input_path = Path::new(&args.input);
     let parent = input_path.parent().unwrap_or_else(|| Path::new(""));
     let h_files: Vec<_> = input_content_files.iter().map(|name| parent.join(name)).collect();
-    // println!("h_files: {:#?}", h_files);
 
+    println!("找到 {} 个头文件需要处理", h_files.len());
+
+    // 准备输出目录
     let gen_out_dir = &args.outdir;
-    fs::remove_dir_all(gen_out_dir);
-    fs::create_dir_all(gen_out_dir);
-    
+    if Path::new(gen_out_dir).exists() {
+        fs::remove_dir_all(gen_out_dir)
+            .map_err(|e| format!("无法删除输出目录 '{}': {}", gen_out_dir, e))?;
+    }
+    fs::create_dir_all(gen_out_dir)
+        .map_err(|e| format!("无法创建输出目录 '{}': {}", gen_out_dir, e))?;
+
     // 创建全局的gen_context，用于管理所有头文件的符号表
     let mut gen_context = gen_context::GenContext::default();
-    let input_filename = input_path.file_name().unwrap().to_str().unwrap();
-    let module_name = match input_filename.rfind(".") {
-        Some(idx) => &input_filename[..idx],
-        None => &input_filename,
-    };
+    let input_filename = input_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| format!("无法获取输入文件名: {}", args.input))?;
+
+    let module_name = input_filename
+        .rfind('.')
+        .map(|idx| &input_filename[..idx])
+        .unwrap_or(input_filename);
     gen_context.module_name = module_name.to_string();
-    
+
     // 第一阶段：解析所有头文件，构建完整的符号表
     for h_file in &h_files {
-        println!("Parsing header file: {:?}", h_file);
-        parser::parse_hpp(&mut gen_context, h_file.as_path().to_str().unwrap(), parent.to_str().unwrap());
+        println!("正在解析头文件: {:?}", h_file);
+        let h_file_str = h_file.to_str()
+            .ok_or_else(|| format!("无效的文件路径: {:?}", h_file))?;
+        let parent_str = parent.to_str()
+            .ok_or_else(|| format!("无效的父目录路径: {:?}", parent))?;
+        parser::parse_hpp(&mut gen_context, h_file_str, parent_str);
     }
-    
-    // 第二阶段：统一生成代码（现在gen_context包含了所有文件的信息）
-    println!("Generating C bindings...");
+
+    // 第二阶段：统一生成代码
+    println!("正在生成 C 绑定代码...");
     gen_c::gen_c(&gen_context, gen_out_dir);
-    println!("Generating Dart bindings...");
+
+    println!("正在生成 Dart 绑定代码...");
     gen_dart::gen_dart(&gen_context, gen_out_dir);
+
+    println!("✓ 代码生成完成！输出目录: {}", gen_out_dir);
+    Ok(())
 }

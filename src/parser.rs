@@ -51,12 +51,16 @@ pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str, include_path:
 
     out_gen_context.hpp_elements.push(file_element);
 }
+// 注意: 这个单元测试已经不维护了
+// 主要测试手段是 Flutter 集成测试: tests/flutter_test_project/run_test.sh
+// 如需测试，请运行: cd tests/flutter_test_project && ./run_test.sh
 #[test]
+#[ignore]
 fn test_parse_hpp() {
     let mut gen_context = GenContext::default();
-    parse_hpp(&mut gen_context, "./tests/1/test.hpp", "");
+    parse_hpp(&mut gen_context, "./tests/parser_test/test.hpp", "./tests/parser_test");
     let result = format!("{:#?}", gen_context);
-    let expected = std::fs::read_to_string("./tests/1/ut_result/parse_hpp.txt").unwrap();
+    let expected = std::fs::read_to_string("./tests/parser_test/ut_result/parse_hpp.txt").unwrap();
     assert_eq!(result, expected);
 }
 
@@ -110,7 +114,7 @@ fn handle_clang_ClassDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
         }
     }
     if let Some(access) = entity.get_accessibility() {
-        if (access != clang::Accessibility::Public) {
+        if access != clang::Accessibility::Public {
             return;
         }
     }
@@ -174,7 +178,7 @@ fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: 
         }
         HppElement::Method(method) => {
             // 当用到了某个类型的 std::vector 时，需要生成这个 std::vector 类对应的方法
-            if (method.return_type.type_kind == TypeKind::StdVector) {
+            if method.return_type.type_kind == TypeKind::StdVector {
                 let stdvector_element = HppElement::new_stdvector_class_element(&method.return_type);
                 let already_exists = out_hpp_elements.iter().any(|element| {
                     match element {
@@ -200,7 +204,7 @@ fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: 
                 }
             }
             // 处理 std::map 返回类型
-            else if (method.return_type.type_kind == TypeKind::StdMap) {
+            else if method.return_type.type_kind == TypeKind::StdMap {
                 let stdmap_element = HppElement::new_stdmap_class_element(&method.return_type);
                 let already_exists = out_hpp_elements.iter().any(|element| {
                     match element {
@@ -226,7 +230,7 @@ fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: 
                 }
             }
             // 处理 std::unordered_map 返回类型
-            else if (method.return_type.type_kind == TypeKind::StdUnorderedMap) {
+            else if method.return_type.type_kind == TypeKind::StdUnorderedMap {
                 let stdunorderedmap_element = HppElement::new_stdunorderedmap_class_element(&method.return_type);
                 let already_exists = out_hpp_elements.iter().any(|element| {
                     match element {
@@ -252,7 +256,7 @@ fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: 
                 }
             }
             // 处理 std::set 返回类型
-            else if (method.return_type.type_kind == TypeKind::StdSet) {
+            else if method.return_type.type_kind == TypeKind::StdSet {
                 let stdset_element = HppElement::new_stdset_class_element(&method.return_type);
                 let already_exists = out_hpp_elements.iter().any(|element| {
                     match element {
@@ -278,7 +282,7 @@ fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: 
                 }
             }
             // 处理 std::unordered_set 返回类型
-            else if (method.return_type.type_kind == TypeKind::StdUnorderedSet) {
+            else if method.return_type.type_kind == TypeKind::StdUnorderedSet {
                 let stdunorderedset_element = HppElement::new_stdunorderedset_class_element(&method.return_type);
                 let already_exists = out_hpp_elements.iter().any(|element| {
                     match element {
@@ -304,7 +308,7 @@ fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: 
                 }
             }
             for param in &method.params {
-                if (param.field_type.type_kind == TypeKind::StdVector) {
+                if param.field_type.type_kind == TypeKind::StdVector {
                         let stdvector_element = HppElement::new_stdvector_class_element(&param.field_type);
                         let already_exists = out_hpp_elements.iter().any(|element| {
                             match element {
@@ -330,7 +334,7 @@ fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: 
                         }
                 }
                 // 处理 std::map 参数类型
-                else if (param.field_type.type_kind == TypeKind::StdMap) {
+                else if param.field_type.type_kind == TypeKind::StdMap {
                         let stdmap_element = HppElement::new_stdmap_class_element(&param.field_type);
                         let already_exists = out_hpp_elements.iter().any(|element| {
                             match element {
@@ -356,7 +360,7 @@ fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: 
                         }
                 }
                 // 处理 std::unordered_map 参数类型
-                else if (param.field_type.type_kind == TypeKind::StdUnorderedMap) {
+                else if param.field_type.type_kind == TypeKind::StdUnorderedMap {
                         let stdunorderedmap_element = HppElement::new_stdunorderedmap_class_element(&param.field_type);
                         let already_exists = out_hpp_elements.iter().any(|element| {
                             match element {
@@ -382,7 +386,7 @@ fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: 
                         }
                 }
                 // 处理 std::set 参数类型
-                else if (param.field_type.type_kind == TypeKind::StdSet) {
+                else if param.field_type.type_kind == TypeKind::StdSet {
                         let stdset_element = HppElement::new_stdset_class_element(&param.field_type);
                         let already_exists = out_hpp_elements.iter().any(|element| {
                             match element {
@@ -408,7 +412,7 @@ fn post_process_hpp_element(out_gen_context: &mut GenContext, out_hpp_elements: 
                         }
                 }
                 // 处理 std::unordered_set 参数类型
-                else if (param.field_type.type_kind == TypeKind::StdUnorderedSet) {
+                else if param.field_type.type_kind == TypeKind::StdUnorderedSet {
                         let stdunorderedset_element = HppElement::new_stdunorderedset_class_element(&param.field_type);
                         let already_exists = out_hpp_elements.iter().any(|element| {
                             match element {
@@ -626,7 +630,7 @@ fn handle_clang_Destructor(out_hpp_element: &mut HppElement, entity: &clang::Ent
 
 fn handle_clang_Method(out_hpp_element: &mut HppElement, entity: &clang::Entity<'_>, indent: usize) {
     if let Some(access) = entity.get_accessibility() {
-        if (access != clang::Accessibility::Public) {
+        if access != clang::Accessibility::Public {
             return;
         }
     }
@@ -689,7 +693,7 @@ fn handle_clang_ParmDecl(out_hpp_element: &mut HppElement, entity: &clang::Entit
 
 fn handle_clang_FieldDecl(out_hpp_element: &mut HppElement, entity: &clang::Entity<'_>, indent: usize) {
     if let Some(access) = entity.get_accessibility() {
-        if (access != clang::Accessibility::Public) {
+        if access != clang::Accessibility::Public {
             return;
         }
     }

@@ -162,7 +162,7 @@ class {} implements Finalizable {{
             {
             // 公共尾
             let dart_file_footer = local_dart_gen_context.cur_file.as_mut().unwrap();
-            let mut class_footer = format!("}}\n\n");
+            let class_footer = format!("}}\n\n");
             dart_file_footer.write(class_footer.as_bytes());
             }
 
@@ -221,7 +221,7 @@ fn gen_dart_api<'a>(gen_context: &GenContext, hpp_element: &'a HppElement, gen_o
 
             let public_file_name = format!("{}_public.dart", gen_context.module_name);
             // 公共头
-            let mut file_header = format!("
+            let file_header = format!("
 import 'dart:ffi';
 import 'dart:io';
 import 'package:ffi/ffi.dart';
@@ -359,7 +359,7 @@ fn get_str_dart_fun_body(class: Option<&Class>, method: &Method) -> String {
     let mut body_suffix = "".to_string();
     match method.method_type {
         MethodType::Normal => {
-            if (method.return_type.type_kind == TypeKind::Class) {
+            if method.return_type.type_kind == TypeKind::Class {
                 body_prefix.push_str(&format!("return {}.FromNative({}(", get_str_dart_fun_type(&method.return_type), ffiapi_c_method_name));
                 body_suffix.push_str("));");
             }
@@ -375,7 +375,7 @@ fn get_str_dart_fun_body(class: Option<&Class>, method: &Method) -> String {
             } 
             else {
                 body_prefix.push_str(&format!("return {}(", ffiapi_c_method_name));
-                if (method.return_type.type_kind == TypeKind::String) {
+                if method.return_type.type_kind == TypeKind::String {
                     body_suffix.push_str(").toDartString();");
                 } else {
                     body_suffix.push_str(");");
@@ -386,7 +386,7 @@ fn get_str_dart_fun_body(class: Option<&Class>, method: &Method) -> String {
             body_prefix.push_str(&format!("_nativePtr = {}(", ffiapi_c_method_name));
             body_suffix.push_str(");
         nativeLifecycleLink();");
-            if (class.unwrap().class_type == ClassType::StdPtr) {
+            if class.unwrap().class_type == ClassType::StdPtr {
                 body_suffix.push_str("
         // stdptr 会接管 obj 对象的生命周期，所以这里不需要 obj 对象再跟 native 对象绑定了
         obj.nativeLifecycleUnlink();");
@@ -591,7 +591,7 @@ fn get_str_dart_fun_params_impl(class: Option<&Class>, method: &Method) -> Strin
 
 /// (初始化内容，回调函数的实现内容)
 fn get_dart_fun_for_regist_callback(class: Option<&Class>, method: &Method) -> (String, String) {
-    if (method.method_type != MethodType::Normal) {
+    if method.method_type != MethodType::Normal {
         return ("".to_string(), "".to_string());
     }
 
@@ -601,11 +601,11 @@ fn get_dart_fun_for_regist_callback(class: Option<&Class>, method: &Method) -> (
     } else {
         ""
     };
-    /// native函数指针类型的名字
+    // native函数指针类型的名字
     let native_fun_type_name = format!("FFI_{}_{}", cur_class_name, method.name);
-    /// 注册函数的名字
+    // 注册函数的名字
     let native_regist_fun_name = format!("{}_regist", native_fun_type_name);
-    /// 实现函数的名字
+    // 实现函数的名字
     let dart_callback_fun_name = format!("_{}_{}", cur_class_name, method.name);
     let params_decl_str = get_str_dart_fun_params_decl_for_regist_callback(class, method);
     let params_impl_str = get_str_dart_fun_params_impl_for_regist_callback(class, method);
@@ -750,11 +750,11 @@ fn get_str_dart_api_for_regist_callback(gen_context: &GenContext, class: Option<
     if let Some(cur_class) = class {
         cur_class_name = &cur_class.type_str;
     }
-    /// native函数指针类型的名字
+    // native函数指针类型的名字
     let native_fun_type_name = format!("FFI_{}_{}", cur_class_name, method.name);
-    /// 注册函数的名字
+    // 注册函数的名字
     let native_regist_fun_name = format!("{}_regist", native_fun_type_name);
-    /// 参数列表
+    // 参数列表
     let params_str = get_str_native_api_params_decl(class, method);
 
     let dart_api_str = format!("typedef {} = {} Function({});

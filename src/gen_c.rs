@@ -180,8 +180,8 @@ fn gen_c_callback_class(c_context: &mut CFileContext, class: &Class) {
                     regist_impl.push_str(&local_regist_impl);
                 }
             }
-            HppElement::Field(field) => {
-                // TODO
+            HppElement::Field(_field) => {
+                // 回调类的字段在注册阶段不需要特殊处理，会在后续统一生成 getter/setter
             }
             _ => {
                 unimplemented!("gen_c_callback_class: unknown child");
@@ -190,7 +190,7 @@ fn gen_c_callback_class(c_context: &mut CFileContext, class: &Class) {
     }
 
     // 生成回调子类
-    let mut c_class_callback_impl = format!("{}
+    let c_class_callback_impl = format!("{}
 class {} : {} {{
 public:
 ", regist_var_decl, subclass_name, class.type_str);
@@ -204,8 +204,8 @@ c_context.cc_str.push_str(&c_class_callback_impl);
                     c_context.cc_str.push_str(&callback_method_impl);
                 }
             }
-            HppElement::Field(field) => {
-                // TODO
+            HppElement::Field(_field) => {
+                // 回调子类继承父类的字段，不需要重新声明
             }
             _ => {
                 unimplemented!("gen_c_callback_class: unknown child");
@@ -214,7 +214,7 @@ c_context.cc_str.push_str(&c_class_callback_impl);
     }
     c_context.cc_str.push_str("\n};\n");
 
-    // 生成回调子类的其他正常函数
+    // 生成回调子类的其他正常函数和字段访问器
     for child in &class.children {
         match child {
             HppElement::Method(method) => {
@@ -228,7 +228,14 @@ c_context.cc_str.push_str(&c_class_callback_impl);
                 }
             }
             HppElement::Field(field) => {
-                // TODO
+                // 为回调类的字段生成 getter 和 setter
+                let (get_decl, set_decl) = get_str_field_decl(Some(&class), field);
+                c_context.ch_str.push_str(&format!("{}\n", get_decl));
+                c_context.ch_str.push_str(&format!("{}\n", set_decl));
+
+                let (get_impl, set_impl) = get_str_field_impl(Some(&class), field);
+                c_context.cc_str.push_str(&format!("{}\n", get_impl));
+                c_context.cc_str.push_str(&format!("{}\n", set_impl));
             }
             _ => {
                 unimplemented!("gen_c_callback_class: unknown child");
@@ -355,13 +362,13 @@ fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> Strin
         let param = method.params.get(i).unwrap();
         let (dart_type_enum, dart_type_set_value, convert_str) = get_str_callback_method_impl_dart_cobject_type(&param.field_type);
         let mut param_name = param.name.clone();
-        if (param.field_type.type_kind == TypeKind::String) {
+        if param.field_type.type_kind == TypeKind::String {
             param_name = format!("{}.c_str()", param_name);
         }
         else if (param.field_type.type_kind == TypeKind::Class) && (param.field_type.ptr_level == 0) {
             param_name = format!("(new {}({}))", param.field_type.type_str, param_name);
         }
-        else if (param.field_type.type_kind == TypeKind::StdPtr || param.field_type.type_kind == TypeKind::StdVector) {
+        else if param.field_type.type_kind == TypeKind::StdPtr || param.field_type.type_kind == TypeKind::StdVector {
             param_name = format!("(new {}({}))", param.field_type.full_str, param_name);
         }
         gen_values.push(format!("
@@ -585,7 +592,7 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
         }
         TypeKind::StdVector => {
             let value_type = field_type.value_type.as_deref().unwrap();
-            if (value_type.type_kind == TypeKind::String) {
+            if value_type.type_kind == TypeKind::String {
                 return format!("FFI_StdVector_String");
             } else {
                 return format!("FFI_StdVector_{}", field_type.get_value_type_str());
@@ -629,7 +636,7 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
         }
         TypeKind::StdSet => {
             let value_type = field_type.value_type.as_deref().unwrap();
-            if (value_type.type_kind == TypeKind::String) {
+            if value_type.type_kind == TypeKind::String {
                 return format!("FFI_StdSet_String");
             } else {
                 return format!("FFI_StdSet_{}", field_type.get_value_type_str());
@@ -637,7 +644,7 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
         }
         TypeKind::StdUnorderedSet => {
             let value_type = field_type.value_type.as_deref().unwrap();
-            if (value_type.type_kind == TypeKind::String) {
+            if value_type.type_kind == TypeKind::String {
                 return format!("FFI_StdUnorderedSet_String");
             } else {
                 return format!("FFI_StdUnorderedSet_{}", field_type.get_value_type_str());
@@ -869,7 +876,7 @@ fn get_str_method_impl_body(class: Option<&Class>, return_field_type: &FieldType
     retStr = {}{}{};
     return (const char*)retStr.c_str();", call_prefix, method_name, full_param_str);
     } 
-    else if (return_field_type.type_kind == TypeKind::Class && 0 == return_field_type.ptr_level) {
+    else if return_field_type.type_kind == TypeKind::Class && 0 == return_field_type.ptr_level {
         return format!("return ({})new {}({}{}{});", impl_return_type, return_field_type.type_str, call_prefix, method_name, full_param_str);
     }
     else if (return_field_type.type_kind == TypeKind::StdPtr && 0 == return_field_type.ptr_level) 
@@ -998,7 +1005,7 @@ fn get_str_ffi_to_cpp_param_field(field_type: &FieldType, param_name: &str) -> S
     if field_type.type_kind == TypeKind::String {
         return format!("std::string({})", param_name);
     }
-    else if (field_type.type_kind == TypeKind::Class && 0 == field_type.ptr_level) {
+    else if field_type.type_kind == TypeKind::Class && 0 == field_type.ptr_level {
         return format!("({})(*({}*){})", &field_type.full_str, field_type.type_str, param_name);
     }
     else if (field_type.type_kind == TypeKind::StdPtr && 0 == field_type.ptr_level)
@@ -1006,19 +1013,19 @@ fn get_str_ffi_to_cpp_param_field(field_type: &FieldType, param_name: &str) -> S
     {
         return format!("({})(*({}*){})", &field_type.full_str, &field_type.full_str, param_name);
     }
-    else if (field_type.type_kind == TypeKind::StdMap && 0 == field_type.ptr_level) {
+    else if field_type.type_kind == TypeKind::StdMap && 0 == field_type.ptr_level {
         let container_type = field_type.full_str.clone();
         return format!("({})(*({}*){})", container_type, container_type, param_name);
     }
-    else if (field_type.type_kind == TypeKind::StdUnorderedMap && 0 == field_type.ptr_level) {
+    else if field_type.type_kind == TypeKind::StdUnorderedMap && 0 == field_type.ptr_level {
         let container_type = field_type.full_str.clone();
         return format!("({})(*({}*){})", container_type, container_type, param_name);
     }
-    else if (field_type.type_kind == TypeKind::StdSet && 0 == field_type.ptr_level) {
+    else if field_type.type_kind == TypeKind::StdSet && 0 == field_type.ptr_level {
         let container_type = field_type.full_str.clone();
         return format!("({})(*({}*){})", container_type, container_type, param_name);
     }
-    else if (field_type.type_kind == TypeKind::StdUnorderedSet && 0 == field_type.ptr_level) {
+    else if field_type.type_kind == TypeKind::StdUnorderedSet && 0 == field_type.ptr_level {
         let container_type = field_type.full_str.clone();
         return format!("({})(*({}*){})", container_type, container_type, param_name);
     }

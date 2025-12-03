@@ -149,7 +149,7 @@ impl HppElement {
             HppElement::Class(class) => {
                 for child in &class.children {
                     if let HppElement::Method(method) = child {
-                        if (method.method_type == MethodType::Constructor) {
+                        if method.method_type == MethodType::Constructor {
                             return;
                         }
                     }
@@ -180,7 +180,7 @@ impl HppElement {
             HppElement::Class(class) => {
                 for child in &class.children {
                     if let HppElement::Method(method) = child {
-                        if (method.method_type == MethodType::Destructor) {
+                        if method.method_type == MethodType::Destructor {
                             return;
                         }
                     }
@@ -1059,7 +1059,7 @@ impl FieldType {
     }
 
     pub fn get_value_type_str(&self) -> String {
-        if (self.value_type.is_none()) {
+        if self.value_type.is_none() {
             return "".to_string();
         }
         let value_type = self.value_type.as_ref().unwrap();
@@ -1071,7 +1071,7 @@ impl FieldType {
     }
 
     pub fn get_key_type_str(&self) -> String {
-        if (self.key_type.is_none()) {
+        if self.key_type.is_none() {
             return "".to_string();
         }
         let key_type = self.key_type.as_ref().unwrap();
