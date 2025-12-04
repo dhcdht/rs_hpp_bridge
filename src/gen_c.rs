@@ -109,7 +109,8 @@ extern \"C\" {{
                 gen_c_enum(&mut c_context, enum_def);
             }
             _ => {
-                unimplemented!("gen_c_file: unknown child, {:?}", child);
+                // clang 解析出现问题时，可能会产生一些预期外的元素
+                // 跳过这些元素，避免程序崩溃
             }
         }
     }
@@ -154,6 +155,13 @@ c_context.ch_str.push_str(&c_class_decl);
 }
 
 fn gen_c_class_method(c_context: &mut CFileContext, class: Option<&Class>, method: &Method) {
+    // 跳过无类名的方法（通常来自第三方库的模板实例化）
+    // 这些方法的 FFI 名称会是 ffi__method_name（注意双下划线）
+    let ffi_name = get_str_ffi_decl_class_name(class, method);
+    if ffi_name.starts_with("ffi__") {
+        return;
+    }
+
     let method_decl = get_str_method_decl(class, method);
     let method_impl = get_str_method_impl(class, method);
 
@@ -569,6 +577,10 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
                 return format!("{}{}", field_type.type_str, "*".repeat(field_type.ptr_level as usize));
             }
         }
+        TypeKind::Enum => {
+            // 枚举类型在 C FFI 中使用 int 表示
+            return "int".to_string();
+        }
         TypeKind::String => {
             return "const char*".to_string();
         }
@@ -595,6 +607,9 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
             return format!("FFI_StdPtr_{}", clean_type_str);
         }
         TypeKind::StdVector => {
+            if field_type.value_type.is_none() {
+                return format!("FFI_StdVector_Unknown");
+            }
             let value_type = field_type.value_type.as_deref().unwrap();
             if value_type.type_kind == TypeKind::String {
                 return format!("FFI_StdVector_String");
@@ -603,9 +618,14 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
             }
         }
         TypeKind::StdMap => {
+            // 如果模板参数解析失败，返回一个占位符类型
+            if field_type.key_type.is_none() || field_type.value_type.is_none() {
+                return format!("FFI_StdMap_Unknown");
+            }
+
             let key_type = field_type.key_type.as_deref().unwrap();
             let value_type = field_type.value_type.as_deref().unwrap();
-            
+
             let key_type_str = if key_type.type_kind == TypeKind::String {
                 "String".to_string()
             } else {
@@ -621,24 +641,30 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
             return format!("FFI_StdMap_{}_{}", key_type_str, value_type_str);
         }
         TypeKind::StdUnorderedMap => {
+            if field_type.key_type.is_none() || field_type.value_type.is_none() {
+                return format!("FFI_StdUnorderedMap_Unknown");
+            }
             let key_type = field_type.key_type.as_deref().unwrap();
             let value_type = field_type.value_type.as_deref().unwrap();
-            
+
             let key_type_str = if key_type.type_kind == TypeKind::String {
                 "String".to_string()
             } else {
                 field_type.get_key_type_str()
             };
-            
+
             let value_type_str = if value_type.type_kind == TypeKind::String {
                 "String".to_string()
             } else {
                 field_type.get_value_type_str()
             };
-            
+
             return format!("FFI_StdUnorderedMap_{}_{}", key_type_str, value_type_str);
         }
         TypeKind::StdSet => {
+            if field_type.value_type.is_none() {
+                return format!("FFI_StdSet_Unknown");
+            }
             let value_type = field_type.value_type.as_deref().unwrap();
             if value_type.type_kind == TypeKind::String {
                 return format!("FFI_StdSet_String");
@@ -647,6 +673,9 @@ fn get_str_ffi_type(field_type: &FieldType) -> String {
             }
         }
         TypeKind::StdUnorderedSet => {
+            if field_type.value_type.is_none() {
+                return format!("FFI_StdUnorderedSet_Unknown");
+            }
             let value_type = field_type.value_type.as_deref().unwrap();
             if value_type.type_kind == TypeKind::String {
                 return format!("FFI_StdUnorderedSet_String");
@@ -967,26 +996,36 @@ fn get_str_params_impl(class: Option<&Class>, method: &Method) -> (String, Strin
                 param_prefixs.push(format!("std::shared_ptr<{}>* ptr = (std::shared_ptr<{}>*)obj;", suffix, suffix));
             }
             else if cur_class.class_type ==  ClassType::StdVector {
-                let suffix = cur_class.value_type.as_deref().unwrap().full_str.clone();
-                param_prefixs.push(format!("std::vector<{}>* ptr = (std::vector<{}>*)obj;", suffix, suffix));
+                if let Some(value_type) = cur_class.value_type.as_deref() {
+                    let suffix = value_type.full_str.clone();
+                    param_prefixs.push(format!("std::vector<{}>* ptr = (std::vector<{}>*)obj;", suffix, suffix));
+                }
             }
             else if cur_class.class_type ==  ClassType::StdMap {
-                let key_suffix = cur_class.key_type.as_deref().unwrap().full_str.clone();
-                let value_suffix = cur_class.value_type.as_deref().unwrap().full_str.clone();
-                param_prefixs.push(format!("std::map<{}, {}>* ptr = (std::map<{}, {}>*)obj;", key_suffix, value_suffix, key_suffix, value_suffix));
+                if let (Some(key_type), Some(value_type)) = (cur_class.key_type.as_deref(), cur_class.value_type.as_deref()) {
+                    let key_suffix = key_type.full_str.clone();
+                    let value_suffix = value_type.full_str.clone();
+                    param_prefixs.push(format!("std::map<{}, {}>* ptr = (std::map<{}, {}>*)obj;", key_suffix, value_suffix, key_suffix, value_suffix));
+                }
             }
             else if cur_class.class_type ==  ClassType::StdUnorderedMap {
-                let key_suffix = cur_class.key_type.as_deref().unwrap().full_str.clone();
-                let value_suffix = cur_class.value_type.as_deref().unwrap().full_str.clone();
-                param_prefixs.push(format!("std::unordered_map<{}, {}>* ptr = (std::unordered_map<{}, {}>*)obj;", key_suffix, value_suffix, key_suffix, value_suffix));
+                if let (Some(key_type), Some(value_type)) = (cur_class.key_type.as_deref(), cur_class.value_type.as_deref()) {
+                    let key_suffix = key_type.full_str.clone();
+                    let value_suffix = value_type.full_str.clone();
+                    param_prefixs.push(format!("std::unordered_map<{}, {}>* ptr = (std::unordered_map<{}, {}>*)obj;", key_suffix, value_suffix, key_suffix, value_suffix));
+                }
             }
             else if cur_class.class_type ==  ClassType::StdSet {
-                let suffix = cur_class.value_type.as_deref().unwrap().full_str.clone();
-                param_prefixs.push(format!("std::set<{}>* ptr = (std::set<{}>*)obj;", suffix, suffix));
+                if let Some(value_type) = cur_class.value_type.as_deref() {
+                    let suffix = value_type.full_str.clone();
+                    param_prefixs.push(format!("std::set<{}>* ptr = (std::set<{}>*)obj;", suffix, suffix));
+                }
             }
             else if cur_class.class_type ==  ClassType::StdUnorderedSet {
-                let suffix = cur_class.value_type.as_deref().unwrap().full_str.clone();
-                param_prefixs.push(format!("std::unordered_set<{}>* ptr = (std::unordered_set<{}>*)obj;", suffix, suffix));
+                if let Some(value_type) = cur_class.value_type.as_deref() {
+                    let suffix = value_type.full_str.clone();
+                    param_prefixs.push(format!("std::unordered_set<{}>* ptr = (std::unordered_set<{}>*)obj;", suffix, suffix));
+                }
             }
             else {
                 param_prefixs.push(format!("{}* ptr = ({}*)obj;", cur_class.type_str, cur_class.type_str));

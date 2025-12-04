@@ -151,7 +151,8 @@ impl HppElement {
                 class.children.push(child);
             }
             _ => {
-                unimplemented!("HppElement::add_child");
+                // clang 解析出现问题时，可能会尝试向非预期的元素添加子元素
+                // 这通常是因为头文件包含错误或依赖缺失，忽略即可
             },
         }
     }
@@ -324,7 +325,21 @@ impl HppElement {
         stdmap_class.key_type = field_type.key_type.clone();
         stdmap_class.value_type = field_type.value_type.clone();
         let mut stdmap_element = HppElement::Class(stdmap_class);
-        
+
+        // 如果 key_type 或 value_type 解析失败，只创建基本的构造和析构函数
+        if field_type.key_type.is_none() || field_type.value_type.is_none() {
+            // 构造函数
+            let constructor_method = Method {
+                method_type: MethodType::Constructor,
+                name: "Constructor".to_string(),
+                return_type: field_type.clone(),
+                ..Default::default()
+            };
+            stdmap_element.add_child(HppElement::Method(constructor_method));
+            stdmap_element.ensure_destructor();
+            return stdmap_element;
+        }
+
         // StdMap class 的构造函数
         let constructor_method = Method {
             method_type: MethodType::Constructor,
@@ -462,7 +477,20 @@ impl HppElement {
         stdunorderedmap_class.key_type = field_type.key_type.clone();
         stdunorderedmap_class.value_type = field_type.value_type.clone();
         let mut stdunorderedmap_element = HppElement::Class(stdunorderedmap_class);
-        
+
+        // 如果 key_type 或 value_type 解析失败，只创建基本的构造和析构函数
+        if field_type.key_type.is_none() || field_type.value_type.is_none() {
+            let constructor_method = Method {
+                method_type: MethodType::Constructor,
+                name: "Constructor".to_string(),
+                return_type: field_type.clone(),
+                ..Default::default()
+            };
+            stdunorderedmap_element.add_child(HppElement::Method(constructor_method));
+            stdunorderedmap_element.ensure_destructor();
+            return stdunorderedmap_element;
+        }
+
         // StdUnorderedMap class 的构造函数
         let constructor_method = Method {
             method_type: MethodType::Constructor,
@@ -891,10 +919,12 @@ impl FieldType {
         display_name = display_name.replace("const ", "");
 
         let mut lower_full_str = display_name.to_lowercase();
-        // enum
+        // enum - 检测是否为枚举类型，但保留类型名称用于后续处理
+        let mut is_enum_type = false;
         if let Some(elaborated) = clang_type.unwrap().get_elaborated_type() {
             if elaborated.get_kind() == clang::TypeKind::Enum {
-                lower_full_str = "int".to_string();
+                is_enum_type = true;
+                // 不再强制转换为 "int"，保留枚举类型名称
             }
         }
 
@@ -1005,7 +1035,14 @@ impl FieldType {
             let ptr_level = lower_full_str.chars().rev().take_while(|&c| c == '*').count();
             field_type.ptr_level = ptr_level as i32;
         }
-        
+
+        // 如果是枚举类型，特殊处理
+        if is_enum_type {
+            field_type.type_kind = TypeKind::Enum;
+            field_type.type_str = display_name.clone();
+            return field_type;
+        }
+
         let lower_full_str_without_ptr = lower_full_str.trim_end_matches('*').trim();
         match lower_full_str_without_ptr {
             "void" => {

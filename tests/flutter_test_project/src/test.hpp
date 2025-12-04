@@ -75,6 +75,9 @@ public:
     std::unordered_map<int, std::string> testStdUnorderedMap(std::unordered_map<std::string, int> m);
     std::set<int> testStdSet(std::set<std::string> s);
     std::unordered_set<std::string> testStdUnorderedSet(std::unordered_set<int> s);
+
+    // Test string-to-string map
+    std::map<std::string, std::string> testStdMapStringString(std::map<std::string, std::string> m);
 };
 
 #endif // TEST_HPP

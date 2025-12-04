@@ -24,17 +24,48 @@ fn simplify_type_for_naming(type_str: &str) -> String {
     }
 }
 
-pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str, include_path: &str) {
+pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str, include_path: &str, cpp_std: &str, extra_clang_args: &[String]) {
     let clang = clang::Clang::new().unwrap();
     let index = clang::Index::new(&clang, true, false);
+
+    // 构建 clang 参数，支持多个 include 路径
+    let mut clang_args = vec![
+        "-x".to_string(), "c++".to_string(),
+        format!("-std={}", cpp_std),
+        "-isystem".to_string(), "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/".to_string(),
+        "-isystem".to_string(), "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/".to_string(),
+    ];
+
+    // 添加用户指定的 include 路径（支持多个，用冒号分隔）
+    for path in include_path.split(':') {
+        if !path.is_empty() {
+            clang_args.push("-I".to_string());
+            clang_args.push(path.to_string());
+        }
+    }
+
+    // 添加额外的 clang 参数
+    clang_args.extend_from_slice(extra_clang_args);
+
+    // 转换为 &str 引用
+    let clang_args_refs: Vec<&str> = clang_args.iter().map(|s| s.as_str()).collect();
+
     let translation_unit = index.parser(hpp_path)
-        .arguments(&[
-            "-x", "c++", 
-            "-isystem", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/",
-            "-isystem", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/",
-            "-isystem", include_path,
-        ])
+        .arguments(&clang_args_refs)
         .parse().unwrap();
+
+    // 检查 clang 诊断信息，打印错误和致命错误
+    let diagnostics = translation_unit.get_diagnostics();
+    for diagnostic in &diagnostics {
+        use clang::diagnostic::Severity;
+        match diagnostic.get_severity() {
+            Severity::Fatal | Severity::Error => {
+                eprintln!("[clang] {:?}: {}", diagnostic.get_severity(), diagnostic.get_text());
+            }
+            _ => {} // 忽略警告和提示
+        }
+    }
+
     let entity = translation_unit.get_entity();
 
     let mut file = File::default();
@@ -58,7 +89,7 @@ pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str, include_path:
 #[ignore]
 fn test_parse_hpp() {
     let mut gen_context = GenContext::default();
-    parse_hpp(&mut gen_context, "./tests/parser_test/test.hpp", "./tests/parser_test");
+    parse_hpp(&mut gen_context, "./tests/parser_test/test.hpp", "./tests/parser_test", "c++20", &[]);
     let result = format!("{:#?}", gen_context);
     let expected = std::fs::read_to_string("./tests/parser_test/ut_result/parse_hpp.txt").unwrap();
     assert_eq!(result, expected);
@@ -100,6 +131,11 @@ fn visit_parse_clang_entity(out_hpp_element: &mut HppElement, entity: &clang::En
 }
 
 fn handle_clang_ClassDecl(out_hpp_element: &mut HppElement, entity: &clang::Entity<'_>, indent: usize) {
+    // 跳过系统头文件中的类
+    if entity.is_in_system_header() {
+        return;
+    }
+
     // 只是前置声明的话，忽略
     if !entity.is_definition() {
         return;
@@ -606,7 +642,9 @@ fn handle_clang_Constructor(out_hpp_element: &mut HppElement, entity: &clang::En
             out_hpp_element.add_child(element);
         }
         _ => {
-            unimplemented!("clang::EntityKind::Constructor");
+            // clang 解析出现问题时，构造函数可能出现在非预期的父元素下
+            // 这通常是因为头文件包含错误或依赖缺失
+            // （不打印详细信息以避免输出过多）
         }
     }
 }
@@ -624,12 +662,19 @@ fn handle_clang_Destructor(out_hpp_element: &mut HppElement, entity: &clang::Ent
             out_hpp_element.add_child(element);
         }
         _ => {
-            unimplemented!("clang::EntityKind::Destructor")
+            // clang 解析出现问题时，析构函数可能出现在非预期的父元素下
+            // 这通常是因为头文件包含错误或依赖缺失
+            // （不打印详细信息以避免输出过多）
         }
     }
 }
 
 fn handle_clang_Method(out_hpp_element: &mut HppElement, entity: &clang::Entity<'_>, indent: usize) {
+    // 跳过系统头文件中的方法
+    if entity.is_in_system_header() {
+        return;
+    }
+
     if let Some(access) = entity.get_accessibility() {
         if access != clang::Accessibility::Public {
             return;
@@ -639,6 +684,21 @@ fn handle_clang_Method(out_hpp_element: &mut HppElement, entity: &clang::Entity<
         if name.starts_with("operator") {
             // 说明 entity 是一个重载操作符方法，不 bridge 重载函数
             return;
+        }
+        // 跳过以下划线开头的方法（通常是内部/私有方法）
+        if name.starts_with("_") {
+            return;
+        }
+    }
+
+    // 只处理在目标文件中定义的方法，过滤掉来自 include 的头文件的方法
+    if let HppElement::Class(class) = out_hpp_element {
+        if let Some(location) = entity.get_location() {
+            let method_file_path = location.get_presumed_location().0;
+            // 如果方法定义的文件和类定义的文件不同，跳过这个方法
+            if class.souce_file_path != method_file_path {
+                return;
+            }
         }
     }
     // 跳过回调类的非 virtual 方法
@@ -682,12 +742,23 @@ fn handle_clang_ParmDecl(out_hpp_element: &mut HppElement, entity: &clang::Entit
         HppElement::Method(method) => {
             let mut param = MethodParam::default();
             param.name = entity.get_name().unwrap_or_default();
+
+            // Debug: 打印参数类型信息（已禁用）
+            // if param.name == "headers" {
+            //     let clang_type = entity.get_type();
+            //     println!("[DEBUG] param '{}': type '{}'", param.name,
+            //              clang_type.as_ref().map(|t| t.get_display_name()).unwrap_or_default());
+            // }
+
             param.field_type = FieldType::from_clang_type(&entity.get_type());
 
             method.params.push(param);
         }
         _ => {
-            unimplemented!("clang::EntityKind::ParmDecl");
+            // clang 解析出现问题时，参数可能出现在非预期的父元素下
+            // 这通常是因为头文件包含错误或依赖缺失
+            // 我们忽略这些参数，而不是让程序崩溃
+            // （不打印详细信息以避免输出过多）
         }
     }
 }
@@ -711,6 +782,51 @@ fn handle_clang_FieldDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
 }
 
 fn handle_clang_FunctionDecl(out_hpp_element: &mut HppElement, entity: &clang::Entity<'_>, indent: usize) {
+    // 跳过系统头文件中的函数
+    if entity.is_in_system_header() {
+        return;
+    }
+
+    // 跳过以下划线开头的函数（通常是内部/私有函数）
+    if let Some(name) = entity.get_name() {
+        if name.starts_with("_") {
+            return;
+        }
+    }
+
+    // 跳过有命名空间的函数（只处理全局函数或者用户自定义命名空间）
+    // 通过检查 semantic parent 是否为 TranslationUnit 来判断是否为全局函数
+    if let Some(semantic_parent) = entity.get_semantic_parent() {
+        let parent_kind = semantic_parent.get_kind();
+        // 如果父级不是 TranslationUnit（全局作用域）且不是 Namespace，说明这是第三方库的函数
+        if parent_kind != clang::EntityKind::TranslationUnit
+            && parent_kind == clang::EntityKind::Namespace {
+            // 如果是命名空间，检查是否为常见的第三方库命名空间
+            if let Some(parent_name) = semantic_parent.get_name() {
+                // std: 标准库命名空间（如 std::vector）
+                // __: 编译器内部命名空间（如 __gnu_cxx）
+                // detail: 第三方库实现细节命名空间（如 nlohmann::detail，很多 C++ 库用 detail 命名空间存放内部实现）
+                // 空字符串: 某些匿名命名空间
+                if parent_name.starts_with("std")
+                    || parent_name.starts_with("__")
+                    || parent_name.contains("detail")
+                    || parent_name.len() == 0 {
+                    return;
+                }
+            }
+        }
+    }
+
+    // 只处理在当前文件中定义的函数
+    match out_hpp_element {
+        HppElement::File(file) => {
+            if file.path != entity.get_location().unwrap().get_presumed_location().0 {
+                return;
+            }
+        }
+        _ => {}
+    }
+
     let mut method = Method::default();
     method.name = entity.get_name().unwrap_or_default();
     method.return_type = FieldType::from_clang_type(&entity.get_result_type());

@@ -374,7 +374,7 @@ fn get_str_dart_fun_body(class: Option<&Class>, method: &Method) -> String {
                 body_prefix.push_str(&format!("return {}.FromNative({}(", get_str_dart_fun_type(&method.return_type), ffiapi_c_method_name));
                 body_suffix.push_str("));");
             }
-            else if (method.return_type.type_kind == TypeKind::StdPtr) 
+            else if (method.return_type.type_kind == TypeKind::StdPtr)
             || method.return_type.type_kind == TypeKind::StdVector
             || method.return_type.type_kind == TypeKind::StdMap
             || method.return_type.type_kind == TypeKind::StdUnorderedMap
@@ -383,11 +383,16 @@ fn get_str_dart_fun_body(class: Option<&Class>, method: &Method) -> String {
             {
                 body_prefix.push_str(&format!("return {}.FromNative({}(", get_str_dart_fun_type(&method.return_type), ffiapi_c_method_name));
                 body_suffix.push_str("));");
-            } 
+            }
             else {
                 body_prefix.push_str(&format!("return {}(", ffiapi_c_method_name));
                 if method.return_type.type_kind == TypeKind::String {
                     body_suffix.push_str(").toDartString();");
+                } else if method.return_type.type_kind == TypeKind::Enum {
+                    // 枚举类型：从 int 转换为枚举，使用 fromValue() 方法
+                    body_suffix.push_str(&format!("))!;"));
+                    // 修改 prefix 以包含 fromValue 调用
+                    body_prefix = format!("return {}.fromValue({}(", get_str_dart_fun_type(&method.return_type), ffiapi_c_method_name);
                 } else {
                     body_suffix.push_str(");");
                 }
@@ -579,7 +584,7 @@ fn get_str_dart_fun_params_impl(class: Option<&Class>, method: &Method) -> Strin
         if !class_is_callback && param.field_type.type_kind == TypeKind::Class {
             param_strs.push(format!("{}.getNativePtr()", param.name));
         }
-        else if param.field_type.type_kind == TypeKind::StdPtr 
+        else if param.field_type.type_kind == TypeKind::StdPtr
         || param.field_type.type_kind == TypeKind::StdVector
         || param.field_type.type_kind == TypeKind::StdMap
         || param.field_type.type_kind == TypeKind::StdUnorderedMap
@@ -591,6 +596,10 @@ fn get_str_dart_fun_params_impl(class: Option<&Class>, method: &Method) -> Strin
         else if param.field_type.type_kind == TypeKind::String {
             // 使用占位符变量，实际分配在 get_str_dart_fun_body 中完成
             param_strs.push(format!("_c_{}", param.name));
+        }
+        else if param.field_type.type_kind == TypeKind::Enum {
+            // 枚举类型需要访问 .value 属性来获取整数值
+            param_strs.push(format!("{}.value", param.name));
         }
         else {
             param_strs.push(format!("{}", param.name));
@@ -674,8 +683,12 @@ fn get_str_dart_fun_params_impl_for_regist_callback(class: Option<&Class>, metho
 }
 
 fn get_str_dart_fun_type(field_type: &FieldType) -> String {
+    // 枚举类型，返回枚举类型名称
+    if field_type.type_kind == TypeKind::Enum {
+        return field_type.type_str.clone();
+    }
     // class类型，需要对应 dart class
-    if field_type.type_kind == TypeKind::Class {
+    else if field_type.type_kind == TypeKind::Class {
         // 清理C++语法，移除const、&、*等修饰符
         let clean_type = field_type.type_str
             .replace("const ", "")
@@ -684,12 +697,12 @@ fn get_str_dart_fun_type(field_type: &FieldType) -> String {
             .replace("*", "")
             .replace(" ", "")
             .replace("::", "");
-        
+
         // Special handling for string types that might be misclassified as Class
         if clean_type == "stdstring" || clean_type == "string" {
             return "String".to_string();
         }
-        
+
         return clean_type;
     }
     // 智能指针类型，需要对应 dart class
@@ -697,26 +710,39 @@ fn get_str_dart_fun_type(field_type: &FieldType) -> String {
         return format!("StdPtr_{}", field_type.type_str);
     }
     else if field_type.type_kind == TypeKind::StdVector {
-        let value_type = field_type.value_type.as_ref().unwrap();
-        return format!("StdVector_{}", value_type.type_str);
+        if let Some(value_type) = field_type.value_type.as_ref() {
+            return format!("StdVector_{}", value_type.type_str);
+        } else {
+            return "StdVector_Unknown".to_string();
+        }
     }
     else if field_type.type_kind == TypeKind::StdMap {
-        let key_type = field_type.key_type.as_ref().unwrap();
-        let value_type = field_type.value_type.as_ref().unwrap();
-        return format!("StdMap_{}_{}", key_type.type_str, value_type.type_str);
+        if let (Some(key_type), Some(value_type)) = (field_type.key_type.as_ref(), field_type.value_type.as_ref()) {
+            return format!("StdMap_{}_{}", key_type.type_str, value_type.type_str);
+        } else {
+            return "StdMap_Unknown".to_string();
+        }
     }
     else if field_type.type_kind == TypeKind::StdUnorderedMap {
-        let key_type = field_type.key_type.as_ref().unwrap();
-        let value_type = field_type.value_type.as_ref().unwrap();
-        return format!("StdUnorderedMap_{}_{}", key_type.type_str, value_type.type_str);
+        if let (Some(key_type), Some(value_type)) = (field_type.key_type.as_ref(), field_type.value_type.as_ref()) {
+            return format!("StdUnorderedMap_{}_{}", key_type.type_str, value_type.type_str);
+        } else {
+            return "StdUnorderedMap_Unknown".to_string();
+        }
     }
     else if field_type.type_kind == TypeKind::StdSet {
-        let value_type = field_type.value_type.as_ref().unwrap();
-        return format!("StdSet_{}", value_type.type_str);
+        if let Some(value_type) = field_type.value_type.as_ref() {
+            return format!("StdSet_{}", value_type.type_str);
+        } else {
+            return "StdSet_Unknown".to_string();
+        }
     }
     else if field_type.type_kind == TypeKind::StdUnorderedSet {
-        let value_type = field_type.value_type.as_ref().unwrap();
-        return format!("StdUnorderedSet_{}", value_type.type_str);
+        if let Some(value_type) = field_type.value_type.as_ref() {
+            return format!("StdUnorderedSet_{}", value_type.type_str);
+        } else {
+            return "StdUnorderedSet_Unknown".to_string();
+        }
     }
 
     // 基础数据类型
@@ -814,6 +840,10 @@ fn get_str_dart_api_type(field_type: &FieldType) -> String {
             }
             TypeKind::Bool => {
                 return "bool".to_string();
+            }
+            TypeKind::Enum => {
+                // 枚举类型在 Dart FFI 中使用 int 表示
+                return "int".to_string();
             }
             TypeKind::String => {
                 return "Pointer<Utf8>".to_string();
@@ -924,6 +954,10 @@ fn get_str_native_api_type(field_type: &FieldType) -> String {
             }
             TypeKind::Bool => {
                 return "Bool".to_string();
+            }
+            TypeKind::Enum => {
+                // 枚举类型在 Native API 中使用 Int64 表示
+                return "Int64".to_string();
             }
             TypeKind::String => {
                 return "Pointer<Utf8>".to_string();
@@ -1154,8 +1188,9 @@ fn element_contains_type(element: &HppElement, type_name: &str) -> bool {
 
 /// 为StdMap类生成便利方法
 fn generate_stdmap_convenience_methods(class: &Class) -> String {
-    let key_type = class.key_type.as_ref().unwrap();
-    let value_type = class.value_type.as_ref().unwrap();
+    // 如果模板参数解析失败，不生成便利方法
+    let Some(key_type) = class.key_type.as_ref() else { return String::new(); };
+    let Some(value_type) = class.value_type.as_ref() else { return String::new(); };
     let key_dart_type = get_str_dart_fun_type(key_type);
     let value_dart_type = get_str_dart_fun_type(value_type);
     
@@ -1206,8 +1241,8 @@ fn generate_stdmap_convenience_methods(class: &Class) -> String {
 
 /// 为StdUnorderedMap类生成便利方法
 fn generate_stdunorderedmap_convenience_methods(class: &Class) -> String {
-    let key_type = class.key_type.as_ref().unwrap();
-    let value_type = class.value_type.as_ref().unwrap();
+    let Some(key_type) = class.key_type.as_ref() else { return String::new(); };
+    let Some(value_type) = class.value_type.as_ref() else { return String::new(); };
     let key_dart_type = get_str_dart_fun_type(key_type);
     let value_dart_type = get_str_dart_fun_type(value_type);
     
@@ -1258,7 +1293,7 @@ fn generate_stdunorderedmap_convenience_methods(class: &Class) -> String {
 
 /// 为StdSet类生成便利方法
 fn generate_stdset_convenience_methods(class: &Class) -> String {
-    let value_type = class.value_type.as_ref().unwrap();
+    let Some(value_type) = class.value_type.as_ref() else { return String::new(); };
     let value_dart_type = get_str_dart_fun_type(value_type);
     
     format!(r#"
@@ -1297,7 +1332,7 @@ fn generate_stdset_convenience_methods(class: &Class) -> String {
 
 /// 为StdUnorderedSet类生成便利方法
 fn generate_stdunorderedset_convenience_methods(class: &Class) -> String {
-    let value_type = class.value_type.as_ref().unwrap();
+    let Some(value_type) = class.value_type.as_ref() else { return String::new(); };
     let value_dart_type = get_str_dart_fun_type(value_type);
     
     format!(r#"

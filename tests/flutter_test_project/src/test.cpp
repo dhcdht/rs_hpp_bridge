@@ -184,3 +184,12 @@ std::unordered_set<std::string> TestClass::testStdUnorderedSet(std::unordered_se
     }
     return result;
 }
+
+std::map<std::string, std::string> TestClass::testStdMapStringString(std::map<std::string, std::string> m) {
+    std::cout << "C++: Testing std::map<std::string, std::string>" << std::endl;
+    std::map<std::string, std::string> result;
+    for (const auto& pair : m) {
+        result[pair.first + "_modified"] = pair.second + "_modified";
+    }
+    return result;
+}
