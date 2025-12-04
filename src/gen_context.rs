@@ -1,5 +1,98 @@
 use core::fmt;
 
+/// 检查类型名是否应该被忽略（不生成绑定）
+/// 这些类型包括：模板参数、第三方库内部类型、STL 内部类型等
+pub fn should_ignore_type(type_str: &str) -> bool {
+    let lower = type_str.to_lowercase();
+
+    // 过滤模板参数（单字母或短名称）
+    if type_str.len() <= 2 && type_str.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return true;
+    }
+
+    // 过滤包含 "typename" 的类型（模板内部类型）
+    if lower.contains("typename") {
+        return true;
+    }
+
+    // 过滤包含模板语法的类型（如 <IteratorType>）
+    if type_str.contains("<") || type_str.contains(">") {
+        return true;
+    }
+
+    // 过滤以特定后缀结尾的类型（第三方库类型别名）
+    let filtered_suffixes = [
+        "_type", "_t", "_ptr", "_opt_t", "_u",
+    ];
+    for suffix in &filtered_suffixes {
+        if lower.ends_with(suffix) {
+            return true;
+        }
+    }
+
+    // 过滤包含 "error" 后缀的异常类型（如 other_error, type_error, parse_error）
+    if lower.ends_with("error") || lower.ends_with("_error") {
+        return true;
+    }
+
+    // 过滤可能是模板类型参数的通用名称
+    let generic_type_params = [
+        "containertype", "chartype", "valuetype", "keytype",
+        "iteratortype", "elementtype", "itemtype",
+        // STL 迭代器和内部类型
+        "iterator", "const_iterator", "reverse_iterator", "const_reverse_iterator",
+        "reference", "const_reference", "pointer", "const_pointer",
+        // JSON 库内部类型
+        "json_pointer",
+    ];
+    for param in &generic_type_params {
+        if lower == *param {
+            return true;
+        }
+    }
+
+    // 过滤第三方库类型关键字（使用更精确的匹配）
+    let third_party_patterns = [
+        "nlohmann", "basicjson",  // nlohmann json 库的内部类型
+        "sockaddr", "structsockaddr",  // socket 结构体
+        "eventloop", "hssl", "reconn", "unpack",  // libhv 库类型
+        "tcpsocket", "udpsocket", "tsocketchannel",
+        "cbor_", "json_sax", "parser_callback",  // JSON 库的特定内部类型
+        "timerid", "buffer",  // libhv 的其他类型
+        "out_of_range",  // 标准异常类型
+    ];
+
+    for pattern in &third_party_patterns {
+        if lower.contains(pattern) {
+            return true;
+        }
+    }
+
+    // 过滤以 "_" 开头或结尾的类型（通常是内部类型）
+    if type_str.starts_with("_") || type_str.ends_with("_") {
+        return true;
+    }
+
+    // 过滤包含 "detail" 的类型（第三方库内部实现）
+    if lower.contains("detail") {
+        return true;
+    }
+
+    // 过滤特定的常见 C/C++ 基础类型（unsigned、long 变体）
+    let basic_type_variants = [
+        "unsignedint", "unsignedlong", "longlong",
+        "unsignedlonglong", "unsignedchar", "unsignedshort",
+    ];
+
+    for variant in &basic_type_variants {
+        if lower == *variant || lower.contains(variant) {
+            return true;
+        }
+    }
+
+    false
+}
+
 #[derive(Debug, Default)]
 pub struct GenContext {
     pub module_name: String,
@@ -122,6 +215,9 @@ pub enum TypeKind {
     StdUnorderedMap,
     StdSet,
     StdUnorderedSet,
+
+    /// 应该被忽略的类型（模板参数、第三方库内部类型等）
+    Ignored,
 }
 
 /// 返回值、字段、参数等的类型
@@ -1083,19 +1179,39 @@ impl FieldType {
                 field_type.type_kind = TypeKind::Bool;
                 field_type.type_str = "bool".to_string();
             }
+            "std::uint8_t" | "uint8_t" | "std::uint16_t" | "uint16_t" |
+            "std::uint32_t" | "uint32_t" | "std::int8_t" | "int8_t" |
+            "std::int16_t" | "int16_t" | "std::int32_t" | "int32_t" => {
+                // std 整数类型映射到 Int64
+                field_type.type_kind = TypeKind::Int64;
+                field_type.type_str = "int64_t".to_string();
+            }
             _ => {
-                // 指针类型
-                if let Some(pointee) = clang_type.unwrap().get_pointee_type() {
-                    field_type.type_kind = TypeKind::Class;
-                    field_type.type_str = clang_type.unwrap().get_pointee_type().unwrap().get_display_name();
-                }
-                // 非指针类型 
-                else {
-                    field_type.type_kind = TypeKind::Class;
-                    field_type.type_str = clang_type.unwrap().get_display_name();
+                // 获取类型名称用于检查
+                let type_display_name = if let Some(_pointee) = clang_type.unwrap().get_pointee_type() {
+                    clang_type.unwrap().get_pointee_type().unwrap().get_display_name()
+                } else {
+                    clang_type.unwrap().get_display_name()
+                };
+
+                // 检查是否应该被忽略
+                if should_ignore_type(&type_display_name) {
+                    field_type.type_kind = TypeKind::Ignored;
+                    field_type.type_str = type_display_name;
+                } else {
+                    // 指针类型
+                    if let Some(_pointee) = clang_type.unwrap().get_pointee_type() {
+                        field_type.type_kind = TypeKind::Class;
+                        field_type.type_str = clang_type.unwrap().get_pointee_type().unwrap().get_display_name();
+                    }
+                    // 非指针类型
+                    else {
+                        field_type.type_kind = TypeKind::Class;
+                        field_type.type_str = clang_type.unwrap().get_display_name();
+                    }
                 }
             }
-            
+
         }
 
         return field_type;

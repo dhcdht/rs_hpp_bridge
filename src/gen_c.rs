@@ -1124,6 +1124,11 @@ fn collect_element_referenced_types(element: &HppElement, typedef_names: &mut Ve
 
 /// 处理单个字段类型，收集需要的typedef
 fn collect_field_type(field_type: &FieldType, typedef_names: &mut Vec<String>) {
+    // 跳过被忽略的类型
+    if field_type.type_kind == TypeKind::Ignored {
+        return;
+    }
+
     match field_type.type_kind {
         TypeKind::Class => {
             // 清理类型名，移除const、&、*等修饰符
@@ -1134,8 +1139,11 @@ fn collect_field_type(field_type: &FieldType, typedef_names: &mut Vec<String>) {
                 .replace("*", "")
                 .replace(" ", "");
             let clean_type_str = cleaned.trim().to_string();
-            
-            if !clean_type_str.is_empty() && !typedef_names.contains(&clean_type_str) {
+
+            // 使用 should_ignore_type 检查是否应该忽略这个类型
+            if !clean_type_str.is_empty()
+                && !typedef_names.contains(&clean_type_str)
+                && !crate::gen_context::should_ignore_type(&clean_type_str) {
                 typedef_names.push(clean_type_str);
             }
         },
@@ -1148,22 +1156,26 @@ fn collect_field_type(field_type: &FieldType, typedef_names: &mut Vec<String>) {
                 .replace("*", "")
                 .replace(" ", "");
             let clean_type_str = cleaned.trim().to_string();
-            
-            if !clean_type_str.is_empty() && !typedef_names.contains(&clean_type_str) {
+
+            // 使用 should_ignore_type 检查是否应该忽略这个类型
+            if !clean_type_str.is_empty()
+                && !typedef_names.contains(&clean_type_str)
+                && !crate::gen_context::should_ignore_type(&clean_type_str) {
                 typedef_names.push(clean_type_str.clone());
-            }
-            let stdptr_typename = format!("StdPtr_{}", clean_type_str);
-            if !typedef_names.contains(&stdptr_typename) {
-                typedef_names.push(stdptr_typename);
+                let stdptr_typename = format!("StdPtr_{}", clean_type_str);
+                if !typedef_names.contains(&stdptr_typename) {
+                    typedef_names.push(stdptr_typename);
+                }
             }
         },
         TypeKind::StdVector => {
             // 处理vector内部的值类型
             if let Some(value_type) = &field_type.value_type {
                 collect_field_type(value_type, typedef_names);
-                
+
                 // 添加StdVector类型本身
-                let vector_type_str = format!("StdVector_{}", field_type.get_value_type_str());
+                let value_type_str = field_type.get_value_type_str();
+                let vector_type_str = format!("StdVector_{}", value_type_str);
                 if !typedef_names.contains(&vector_type_str) {
                     typedef_names.push(vector_type_str);
                 }
@@ -1174,12 +1186,14 @@ fn collect_field_type(field_type: &FieldType, typedef_names: &mut Vec<String>) {
             if let Some(key_type) = &field_type.key_type {
                 collect_field_type(key_type, typedef_names);
             }
-            
+
             if let Some(value_type) = &field_type.value_type {
                 collect_field_type(value_type, typedef_names);
-                
+
                 // 添加StdMap类型本身
-                let map_type_str = format!("StdMap_{}_{}", field_type.get_key_type_str(), field_type.get_value_type_str());
+                let key_type_str = field_type.get_key_type_str();
+                let value_type_str = field_type.get_value_type_str();
+                let map_type_str = format!("StdMap_{}_{}", key_type_str, value_type_str);
                 if !typedef_names.contains(&map_type_str) {
                     typedef_names.push(map_type_str);
                 }
@@ -1190,12 +1204,14 @@ fn collect_field_type(field_type: &FieldType, typedef_names: &mut Vec<String>) {
             if let Some(key_type) = &field_type.key_type {
                 collect_field_type(key_type, typedef_names);
             }
-            
+
             if let Some(value_type) = &field_type.value_type {
                 collect_field_type(value_type, typedef_names);
-                
+
                 // 添加StdUnorderedMap类型本身
-                let map_type_str = format!("StdUnorderedMap_{}_{}", field_type.get_key_type_str(), field_type.get_value_type_str());
+                let key_type_str = field_type.get_key_type_str();
+                let value_type_str = field_type.get_value_type_str();
+                let map_type_str = format!("StdUnorderedMap_{}_{}", key_type_str, value_type_str);
                 if !typedef_names.contains(&map_type_str) {
                     typedef_names.push(map_type_str);
                 }
@@ -1205,9 +1221,10 @@ fn collect_field_type(field_type: &FieldType, typedef_names: &mut Vec<String>) {
             // 处理set内部的值类型
             if let Some(value_type) = &field_type.value_type {
                 collect_field_type(value_type, typedef_names);
-                
+
                 // 添加StdSet类型本身
-                let set_type_str = format!("StdSet_{}", field_type.get_value_type_str());
+                let value_type_str = field_type.get_value_type_str();
+                let set_type_str = format!("StdSet_{}", value_type_str);
                 if !typedef_names.contains(&set_type_str) {
                     typedef_names.push(set_type_str);
                 }
@@ -1217,9 +1234,10 @@ fn collect_field_type(field_type: &FieldType, typedef_names: &mut Vec<String>) {
             // 处理unordered_set内部的值类型
             if let Some(value_type) = &field_type.value_type {
                 collect_field_type(value_type, typedef_names);
-                
+
                 // 添加StdUnorderedSet类型本身
-                let set_type_str = format!("StdUnorderedSet_{}", field_type.get_value_type_str());
+                let value_type_str = field_type.get_value_type_str();
+                let set_type_str = format!("StdUnorderedSet_{}", value_type_str);
                 if !typedef_names.contains(&set_type_str) {
                     typedef_names.push(set_type_str);
                 }

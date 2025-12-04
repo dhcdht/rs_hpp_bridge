@@ -719,6 +719,11 @@ fn handle_clang_Method(out_hpp_element: &mut HppElement, entity: &clang::Entity<
     // 检查是否为静态方法
     method.is_static = entity.is_static_method();
 
+    // 跳过返回值类型被忽略的方法
+    if method.return_type.type_kind == TypeKind::Ignored {
+        return;
+    }
+
     // todo: dhcdht 跳过 callback 中有返回值的方法，这种情况在 dart 中无法处理
     match out_hpp_element {
         HppElement::Class(class) => {
@@ -734,6 +739,17 @@ fn handle_clang_Method(out_hpp_element: &mut HppElement, entity: &clang::Entity<
     for child in entity.get_children() {
         visit_parse_clang_entity(&mut element, &child, indent + 1);
     }
+
+    // 检查参数是否包含被忽略的类型
+    if let HppElement::Method(ref method) = element {
+        for param in &method.params {
+            if param.field_type.type_kind == TypeKind::Ignored {
+                // 跳过包含被忽略类型的方法
+                return;
+            }
+        }
+    }
+
     out_hpp_element.add_child(element);
 }
 
@@ -774,6 +790,12 @@ fn handle_clang_FieldDecl(out_hpp_element: &mut HppElement, entity: &clang::Enti
     field.name = entity.get_name().unwrap_or_default();
     field.field_type = FieldType::from_clang_type(&entity.get_type());
     field.comment_str = entity.get_comment();
+
+    // 跳过类型被忽略的字段
+    if field.field_type.type_kind == TypeKind::Ignored {
+        return;
+    }
+
     let mut element = HppElement::Field(field);
     for child in entity.get_children() {
         visit_parse_clang_entity(&mut element, &child, indent + 1);

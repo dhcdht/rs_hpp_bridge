@@ -184,12 +184,33 @@ class {} implements Finalizable {{
             let local_dart_gen_context = dart_gen_context.unwrap();
             let dart_file = local_dart_gen_context.cur_file.as_mut().unwrap();
 
+            // 跳过无类名的方法（通常来自第三方库的模板实例化）
+            // 这些方法的 FFI 名称会是 ffi__method_name（注意双下划线）
+            let mut cur_class_name = "";
+            if let Some(cur_class) = local_dart_gen_context.cur_class {
+                cur_class_name = &cur_class.type_str;
+            }
+            let ffi_name = format!("ffi_{}_{}", cur_class_name, method.name);
+            if ffi_name.starts_with("ffi__") {
+                return;
+            }
+
             let method_impl = get_str_dart_fun(local_dart_gen_context.cur_class, method);
             dart_file.write(method_impl.as_bytes());
         }
         HppElement::Field(field) => {
             let local_dart_gen_context = dart_gen_context.unwrap();
             let dart_file = local_dart_gen_context.cur_file.as_mut().unwrap();
+
+            // 跳过无类名的字段 getter/setter（通常来自第三方库）
+            let mut cur_class_name = "";
+            if let Some(cur_class) = local_dart_gen_context.cur_class {
+                cur_class_name = &cur_class.type_str;
+            }
+            let ffi_get_name = format!("ffi_{}_get_{}", cur_class_name, field.name);
+            if ffi_get_name.starts_with("ffi__") {
+                return;
+            }
 
             // get
             let get_method = Method::new_get_for_field(field);
@@ -254,6 +275,17 @@ import '{}';
             let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
             let ffiapi_file = local_ffiapi_gen_context.cur_file.as_mut().unwrap();
 
+            // 跳过无类名的方法（通常来自第三方库的模板实例化）
+            // 这些方法的 FFI 名称会是 ffi__method_name（注意双下划线）
+            let mut cur_class_name = "";
+            if let Some(cur_class) = local_ffiapi_gen_context.cur_class {
+                cur_class_name = &cur_class.type_str;
+            }
+            let ffi_name = format!("ffi_{}_{}", cur_class_name, method.name);
+            if ffi_name.starts_with("ffi__") {
+                return;
+            }
+
             if local_ffiapi_gen_context.cur_class.is_some() && local_ffiapi_gen_context.cur_class.unwrap().is_callback() {
                 // 对于回调类，需要特殊生成注册函数
                 let dart_api_str = get_str_dart_api_for_regist_callback(gen_context, local_ffiapi_gen_context.cur_class, method);
@@ -266,6 +298,16 @@ import '{}';
         HppElement::Field(field) => {
             let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
             let ffiapi_file = local_ffiapi_gen_context.cur_file.as_mut().unwrap();
+
+            // 跳过无类名的字段 getter/setter（通常来自第三方库）
+            let mut cur_class_name = "";
+            if let Some(cur_class) = local_ffiapi_gen_context.cur_class {
+                cur_class_name = &cur_class.type_str;
+            }
+            let ffi_get_name = format!("ffi_{}_get_{}", cur_class_name, field.name);
+            if ffi_get_name.starts_with("ffi__") {
+                return;
+            }
 
             // get
             let get_method = Method::new_get_for_field(field);
@@ -982,6 +1024,11 @@ fn get_str_native_api_type(field_type: &FieldType) -> String {
             }
             TypeKind::StdUnorderedMap => {
                 return "Pointer<Void>".to_string();
+            }
+            TypeKind::Ignored => {
+                // 被忽略的类型不应该出现在公开 API 中
+                // 如果出现了，说明有方法使用了不应该暴露的类型
+                panic!("Ignored type '{}' found in method signature. This type should not be exposed in the API.", field_type.type_str);
             }
             _ => {
                 unimplemented!("get_native_fun_type_str: unknown type kind, {:?}", field_type);
