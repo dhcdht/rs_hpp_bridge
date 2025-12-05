@@ -356,19 +356,18 @@ void main() {
       expect(retrievedPoint.get_y(), 200);
 
       // Test Color enum
-      simpleA.setColor(Color.red.value);
-      expect(simpleA.getColor(), Color.red.value);
+      simpleA.setColor(Color.red);
+      expect(simpleA.getColor(), Color.red);
 
-      simpleA.setColor(Color.green.value);
-      expect(simpleA.getColor(), Color.green.value);
+      simpleA.setColor(Color.green);
+      expect(simpleA.getColor(), Color.green);
 
-      simpleA.setColor(Color.blue.value);
-      expect(simpleA.getColor(), Color.blue.value);
+      simpleA.setColor(Color.blue);
+      expect(simpleA.getColor(), Color.blue);
 
       // Test fromValue conversion
       final colorValue = simpleA.getColor();
-      final color = Color.fromValue(colorValue);
-      expect(color, Color.blue);
+      expect(colorValue, Color.blue);
     });
 
     test('test SimpleB class', () async {
