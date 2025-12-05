@@ -4,6 +4,12 @@ set -e  # 遇到错误立即退出
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 PROJECT_ROOT=$( cd -- "$SCRIPT_DIR/../.." &> /dev/null && pwd )
 
+# 解析命令行参数
+QUICK_CHECK=false
+if [[ "$1" == "--quick-check" ]] || [[ "$1" == "-q" ]]; then
+    QUICK_CHECK=true
+fi
+
 # 颜色输出
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -52,7 +58,7 @@ build_rust() {
 
 # 步骤 2: 生成桥接代码
 generate_bridge() {
-    echo_info "步骤 2/6: 生成桥接代码"
+    echo_info "步骤 2/7: 生成桥接代码"
     cd "$PROJECT_ROOT"
     if ! RUST_BACKTRACE=1 ./target/debug/rs_hpp_bridge \
         -i tests/flutter_test_project/src/TestModule.i \
@@ -63,9 +69,22 @@ generate_bridge() {
     echo_info "✓ 桥接代码生成成功"
 }
 
-# 步骤 3: 安装 Flutter 依赖
+# 步骤 3: 运行质量检查测试
+quality_check() {
+    echo_info "步骤 3/7: 运行代码质量检查"
+    cd "$PROJECT_ROOT"
+    if ! cargo test --test quality_check_test -- --nocapture; then
+        echo_error "代码质量检查失败"
+        echo_error "生成的代码可能包含第三方库污染或其他质量问题"
+        echo_error "请检查测试输出以了解详细信息"
+        exit 1
+    fi
+    echo_info "✓ 代码质量检查通过"
+}
+
+# 步骤 4: 安装 Flutter 依赖
 install_flutter_deps() {
-    echo_info "步骤 3/6: 安装 Flutter 依赖"
+    echo_info "步骤 4/7: 安装 Flutter 依赖"
     cd "$SCRIPT_DIR"
     if ! $ARCH_PREFIX fvm flutter pub get; then
         echo_error "Flutter 依赖安装失败"
@@ -74,9 +93,9 @@ install_flutter_deps() {
     echo_info "✓ Flutter 依赖安装成功"
 }
 
-# 步骤 4: 安装 CocoaPods 依赖
+# 步骤 5: 安装 CocoaPods 依赖
 install_pod_deps() {
-    echo_info "步骤 4/6: 安装 CocoaPods 依赖"
+    echo_info "步骤 5/7: 安装 CocoaPods 依赖"
     cd "$SCRIPT_DIR/example/macos"
     if ! pod install; then
         echo_warn "CocoaPods 安装有警告，但继续执行..."
@@ -84,9 +103,9 @@ install_pod_deps() {
     echo_info "✓ CocoaPods 依赖处理完成"
 }
 
-# 步骤 5: 构建 macOS 应用
+# 步骤 6: 构建 macOS 应用
 build_macos() {
-    echo_info "步骤 5/6: 构建 macOS 应用"
+    echo_info "步骤 6/7: 构建 macOS 应用"
     cd "$SCRIPT_DIR/example"
     if ! $ARCH_PREFIX fvm flutter build macos --debug; then
         echo_error "macOS 应用构建失败"
@@ -95,15 +114,36 @@ build_macos() {
     echo_info "✓ macOS 应用构建成功"
 }
 
-# 步骤 6: 运行测试
+# 步骤 7: 运行 Flutter 功能测试
 run_tests() {
-    echo_info "步骤 6/6: 运行 Flutter 测试"
+    echo_info "步骤 7/7: 运行 Flutter 功能测试"
     cd "$SCRIPT_DIR/example"
     if ! $ARCH_PREFIX fvm flutter test; then
-        echo_error "测试失败"
+        echo_error "Flutter 功能测试失败"
         exit 1
     fi
-    echo_info "✓ 所有测试通过"
+    echo_info "✓ 所有 Flutter 功能测试通过"
+}
+
+# 快速检查模式：只执行构建、生成和质量检查
+quick_check_mode() {
+    echo_info "========================================="
+    echo_info "  快速质量检查模式"
+    echo_info "========================================="
+
+    detect_arch
+    build_rust
+    generate_bridge
+    quality_check
+
+    echo_info "========================================="
+    echo_info "  ✓ 快速检查完成！"
+    echo_info "  - Rust 项目构建成功"
+    echo_info "  - 桥接代码生成成功"
+    echo_info "  - 代码质量检查通过"
+    echo_info ""
+    echo_info "  提示: 运行完整测试请执行 ./run_test.sh"
+    echo_info "========================================="
 }
 
 # 主流程
@@ -115,6 +155,7 @@ main() {
     detect_arch
     build_rust
     generate_bridge
+    quality_check       # 新增：代码质量检查
     install_flutter_deps
     install_pod_deps
     build_macos
@@ -122,7 +163,16 @@ main() {
 
     echo_info "========================================="
     echo_info "  ✓ 所有步骤完成！"
+    echo_info "  - Rust 项目构建成功"
+    echo_info "  - 桥接代码生成成功"
+    echo_info "  - 代码质量检查通过"
+    echo_info "  - Flutter 功能测试通过"
     echo_info "========================================="
 }
 
-main
+# 根据参数选择运行模式
+if [ "$QUICK_CHECK" = true ]; then
+    quick_check_mode
+else
+    main
+fi
