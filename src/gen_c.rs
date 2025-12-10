@@ -45,7 +45,9 @@ fn gen_c_file(gen_context: &GenContext, file: &File, gen_out_dir: &str) {
 
 #define API_EXPORT __attribute__((visibility(\"default\"))) __attribute__((used))
 
+#ifdef __cplusplus
 extern \"C\" {{
+#endif
 ");
     // 收集所有需要生成 typedef 的类型名
     let mut typedef_names = vec![];
@@ -75,14 +77,21 @@ extern \"C\" {{
     let mut cc_str = String::new();
     let cc_header = format!("
 #include \"{}\"
-#include \"{}\"
-#include \"dart_api_dl.h\"
 #include <set>
 #include <mutex>
+#include <map>
+#include <condition_variable>
+#include <atomic>
+
+extern \"C\" {{
+#include \"dart_api_dl.h\"
+}}
+
+#include \"{}\"
 
 extern \"C\" {{
 
-", h_filename, hpp_filename);
+", hpp_filename, h_filename);
     cc_str.push_str(&cc_header);
 
     let mut c_context = CFileContext{
@@ -117,7 +126,9 @@ extern \"C\" {{
 
     // 公共尾
     let ch_footer = r#"
+#ifdef __cplusplus
 } // extern "C"
+#endif
 "#;
     ch_str.push_str(&ch_footer);
     let cc_footer = r#"
@@ -179,8 +190,12 @@ fn gen_c_callback_class(c_context: &mut CFileContext, class: &Class) {
 
     // 注册函数的声明和实现
     let mut regist_decl = String::new();
-    let mut regist_var_decl = String::new();
+    let mut regist_var_decl_global = String::new();  // 全局变量声明（异步回调）
+    let mut regist_var_decl_member = String::new();  // 成员变量声明（同步回调）
     let mut regist_impl = String::new();
+    let mut method_id_enums = String::new();  // 方法 ID 枚举
+    let mut has_sync_callback = false;  // 是否有同步回调方法
+
     for child in &class.children {
         match child {
             HppElement::Method(method) => {
@@ -188,7 +203,49 @@ fn gen_c_callback_class(c_context: &mut CFileContext, class: &Class) {
                 if method.method_type == MethodType::Normal {
                     let (local_regist_decl, local_regist_var_decl, local_regist_impl) = get_str_callback_method_regist(Some(&class), method);
                     regist_decl.push_str(&local_regist_decl);
-                    regist_var_decl.push_str(&local_regist_var_decl);
+                    // 根据是否需要同步调用，决定变量声明的位置
+                    if callback_needs_sync_call(method) {
+                        // 同步回调：helper函数放在全局（供_regist使用），成员变量放在类内
+                        // local_regist_var_decl包含两部分：成员变量声明 + helper函数定义
+                        // 需要拆分它们
+                        let var_decl_lines: Vec<&str> = local_regist_var_decl.lines().collect();
+                        let mut member_part = String::new();
+                        let mut global_part = String::new();
+                        let mut in_member_section = true;
+
+                        for line in var_decl_lines {
+                            // 成员变量声明行（第一行）
+                            if line.contains("= nullptr") {
+                                member_part.push_str(line);
+                                member_part.push('\n');
+                                in_member_section = false;
+                            } else if !in_member_section {
+                                // helper 函数定义（后续行）
+                                global_part.push_str(line);
+                                global_part.push('\n');
+                            }
+                        }
+
+                        regist_var_decl_global.push_str(&global_part);
+                        regist_var_decl_member.push_str(&member_part);
+                        has_sync_callback = true;
+                        // 生成方法 ID 常量
+                        method_id_enums.push_str(&format!(
+                            "static constexpr int64_t METHOD_ID_{}_{} = {};\n",
+                            class.type_str,
+                            method.name,
+                            format!("0x{:016x}", {
+                                use std::collections::hash_map::DefaultHasher;
+                                use std::hash::{Hash, Hasher};
+                                let mut hasher = DefaultHasher::new();
+                                format!("{}_{}", class.type_str, method.name).hash(&mut hasher);
+                                hasher.finish()
+                            })
+                        ));
+                    } else {
+                        // 异步回调：函数指针是全局变量
+                        regist_var_decl_global.push_str(&local_regist_var_decl);
+                    }
                     regist_impl.push_str(&local_regist_impl);
                 }
             }
@@ -201,11 +258,39 @@ fn gen_c_callback_class(c_context: &mut CFileContext, class: &Class) {
         }
     }
 
+    // 如果有同步回调，生成全局的请求-响应管理器
+    let request_response_manager = if has_sync_callback {
+        format!("
+// 全局请求-响应管理器（用于同步回调）
+{}
+
+static std::map<int64_t, int64_t> callback_results;  // request_id -> result
+static std::mutex callback_results_mutex;
+static std::condition_variable callback_results_cv;
+
+// Dart 调用此函数来设置回调结果
+API_EXPORT void FFI_{}_setCallbackResult(int64_t request_id, int64_t result) {{
+    std::lock_guard<std::mutex> lock(callback_results_mutex);
+    callback_results[request_id] = result;
+    callback_results_cv.notify_all();
+}}
+", method_id_enums, class.type_str)
+    } else {
+        String::new()
+    };
+
+    // 在 .h 文件中添加 setCallbackResult 函数声明
+    if has_sync_callback {
+        c_context.ch_str.push_str(&format!("
+API_EXPORT void FFI_{}_setCallbackResult(int64_t request_id, int64_t result);
+", class.type_str));
+    }
+
     // 生成回调子类
-    let c_class_callback_impl = format!("{}
+    let c_class_callback_impl = format!("{}{}
 class {} : {} {{
 public:
-", regist_var_decl, subclass_name, class.type_str);
+", regist_var_decl_global, request_response_manager, subclass_name, class.type_str);
 c_context.cc_str.push_str(&c_class_callback_impl);
     for child in &class.children {
         match child {
@@ -223,6 +308,11 @@ c_context.cc_str.push_str(&c_class_callback_impl);
                 unimplemented!("gen_c_callback_class: unknown child");
             }
         }
+    }
+    // 在类定义的末尾添加成员变量声明
+    if !regist_var_decl_member.is_empty() {
+        c_context.cc_str.push_str("\n    // 同步回调的函数指针成员变量\n");
+        c_context.cc_str.push_str(&regist_var_decl_member);
     }
     c_context.cc_str.push_str("\n};\n");
 
@@ -347,6 +437,14 @@ fn get_str_field_impl(class: Option<&Class>, field: &Field) -> (String, String) 
 //     return c_class_callback_method_impl;
 // }
 
+/// 判断 callback 方法是否需要同步调用
+/// 根据注释中的 @callback_sync 或 @callback_async 标记决定
+/// 如果没有标记，默认为异步（使用 SendPort）
+fn callback_needs_sync_call(method: &Method) -> bool {
+    // 检查是否有明确的同步标记
+    method.is_sync_callback
+}
+
 /// 回调方法的实现
 fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> String {
     if (method.method_type == MethodType::Constructor) || (method.method_type == MethodType::Destructor) {
@@ -356,6 +454,18 @@ fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> Strin
     // ffi 中的类型名
     let ffi_class_name = format!("FFI_{}", class.unwrap().type_str);
     // 指向函数指针的变量
+    let fun_ptr_var_str = format!("{}_{}", class.unwrap().type_str, method.name);
+
+    // 根据返回值类型选择实现方式
+    if callback_needs_sync_call(method) {
+        return get_str_callback_method_impl_sync(class, method);
+    } else {
+        return get_str_callback_method_impl_async(class, method);
+    }
+}
+
+/// 生成异步 callback 方法实现（void 返回值）
+fn get_str_callback_method_impl_async(class: Option<&Class>, method: &Method) -> String {
     let fun_ptr_var_str = format!("{}_{}", class.unwrap().type_str, method.name);
 
     // .cpp 中的实现
@@ -398,6 +508,16 @@ fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> Strin
     let gen_values_str = gen_values.join("");
     let values_str = values.join(", ");
 
+    // 生成返回语句（异步回调无法立即返回值，返回默认值）
+    let return_stmt = match method.return_type.type_kind {
+        TypeKind::Void => String::new(),
+        TypeKind::Int64 | TypeKind::Char => "\n        return 0;".to_string(),
+        TypeKind::Bool => "\n        return false;".to_string(),
+        TypeKind::Float => "\n        return 0.0f;".to_string(),
+        TypeKind::Double => "\n        return 0.0;".to_string(),
+        _ => "\n        return 0;".to_string(),
+    };
+
     let ret_str = format!("    virtual {} {}({}) override {{
         {}
 
@@ -410,17 +530,17 @@ fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> Strin
         args.type = Dart_CObject_kArray;
         args.value.as_array.length = {};
         args.value.as_array.values = values;
-        
+
         // 创建临时副本以避免在持有锁时调用 Dart API
         std::set<int64_t> callbackPorts;
         {{
             std::lock_guard<std::mutex> lock(get{}Mutex());
             callbackPorts = get{}Set();
         }}
-        
+
         for (const auto& item : callbackPorts) {{
             Dart_PostCObject_DL((Dart_Port_DL)item, &args);
-        }}
+        }}{}
 }};
 ",
         method.return_type.full_str, method.name, decl_params_str,
@@ -429,7 +549,117 @@ fn get_str_callback_method_impl(class: Option<&Class>, method: &Method) -> Strin
         args_num,
         fun_ptr_var_str,
         fun_ptr_var_str,
+        return_stmt,
     );
+
+    return ret_str;
+}
+
+/// 生成同步 callback 方法实现（使用函数指针）
+/// C++ 直接调用 Dart 函数指针，避免事件循环阻塞
+fn get_str_callback_method_impl_sync(class: Option<&Class>, method: &Method) -> String {
+    let class_name = class.unwrap().type_str.as_str();
+    let method_name = &method.name;
+
+    // 构造参数列表
+    let mut decl_params = Vec::new();
+    let mut call_params = Vec::new();
+    let mut param_conversions = Vec::new();
+
+    // 添加 this 指针作为第一个参数
+    call_params.push("(int64_t)this".to_string());
+
+    for (i, param) in method.params.iter().enumerate() {
+        decl_params.push(format!("{} {}", param.field_type.full_str, param.name));
+
+        // 转换参数为FFI类型
+        let param_call = match param.field_type.type_kind {
+            TypeKind::Int64 | TypeKind::Bool => {
+                format!("(int64_t){}", param.name)
+            }
+            TypeKind::Float | TypeKind::Double => {
+                // 生成临时变量来转换 float/double 到 int64_t
+                let temp_var = format!("_param_{}", i);
+                param_conversions.push(format!(
+                    "        {} *_ptr_{} = ({} *)&{};\n        int64_t {} = *((int64_t *)_ptr_{});",
+                    param.field_type.full_str, i, param.field_type.full_str, param.name, temp_var, i
+                ));
+                temp_var
+            }
+            TypeKind::String => {
+                // String 需要转换为 const char* 指针
+                format!("(int64_t){}.c_str()", param.name)
+            }
+            _ => format!("(int64_t){}", param.name)
+        };
+        call_params.push(param_call);
+    }
+
+    let decl_params_str = decl_params.join(", ");
+    let call_params_str = call_params.join(", ");
+    let param_conversions_str = if param_conversions.is_empty() {
+        String::new()
+    } else {
+        format!("\n{}\n", param_conversions.join("\n"))
+    };
+
+    // 生成默认返回值
+    let default_return = match method.return_type.type_kind {
+        TypeKind::Int64 => "0",
+        TypeKind::Float | TypeKind::Double => "0.0",
+        TypeKind::Bool => "false",
+        _ => "0",
+    };
+
+    // 函数指针类型
+    let fnptr_name = format!("{}_{}_fnptr", class_name, method_name);
+    let return_cpp_type = &method.return_type.full_str;
+
+    // 生成实现
+    let ret_str = if method.return_type.type_kind == TypeKind::Void {
+        // void 返回类型的特殊处理
+        format!("    virtual void {}({}) override {{
+        if ({} == nullptr) {{
+            return;  // 没有注册函数指针
+        }}
+{}
+        // 直接调用 Dart 函数指针
+        {}({});
+    }}
+",
+            method_name, decl_params_str,
+            fnptr_name,
+            param_conversions_str,
+            fnptr_name, call_params_str
+        )
+    } else {
+        // 非 void 返回类型
+        format!("    virtual {} {}({}) override {{
+        if ({} == nullptr) {{
+            return {};  // 没有注册函数指针，返回默认值
+        }}
+{}
+        // 直接调用 Dart 函数指针
+        int64_t result = {}({});
+
+        // 转换返回值
+        {}
+    }}
+",
+            return_cpp_type, method_name, decl_params_str,
+            fnptr_name,
+            default_return,
+            param_conversions_str,
+            fnptr_name, call_params_str,
+            match method.return_type.type_kind {
+                TypeKind::Int64 => "return (int)result;".to_string(),
+                TypeKind::Bool => "return (bool)result;".to_string(),
+                TypeKind::Float => "return *((float *)&result);".to_string(),
+                TypeKind::Double => "return *((double *)&result);".to_string(),
+                _ => "return result;".to_string(),
+            }
+        )
+    };
 
     return ret_str;
 }
@@ -513,6 +743,16 @@ fn get_str_callback_method_regist(class: Option<&Class>, method: &Method) -> (St
         return ("".to_string(), "".to_string(), "".to_string());
     }
 
+    // 根据返回值类型选择注册方式
+    if callback_needs_sync_call(method) {
+        return get_str_callback_method_regist_sync(class, method);
+    } else {
+        return get_str_callback_method_regist_async(class, method);
+    }
+}
+
+/// 生成异步回调的注册代码（void 返回值，使用 port）
+fn get_str_callback_method_regist_async(class: Option<&Class>, method: &Method) -> (String, String, String) {
     // ffi 中的类型名
     let ffi_class_name = format!("FFI_{}", class.unwrap().type_str);
     // 函数指针类型的名字
@@ -564,6 +804,82 @@ static std::mutex& get{}Mutex() {{
     fun_ptr_var_str,
     fun_ptr_var_str, method.name,
 );
+
+    return (regist_decl, regist_var_decl, regist_impl);
+}
+
+/// 生成同步回调的注册代码（有返回值，使用 SendPort）
+fn get_str_callback_method_regist_sync(class: Option<&Class>, method: &Method) -> (String, String, String) {
+    // ffi 中的类型名
+    let ffi_class_name = format!("FFI_{}", class.unwrap().type_str);
+    // 函数指针类型的名字
+    let fun_ptr_type_str = format!("{}_{}_FnPtr", ffi_class_name, method.name);
+    // 指向函数指针的变量
+    let fun_ptr_var_str = format!("{}_{}_fnptr", class.unwrap().type_str, method.name);
+    // Port 集合变量名（用于通过 SendPort 发送消息）
+    let port_var_str = format!("{}_{}", class.unwrap().type_str, method.name);
+
+    // 构造函数指针的参数列表（包含 this 指针和实际参数）
+    // 注意：Dart 的 Pointer.fromFunction 要求所有参数都是 int64_t
+    let mut fnptr_params = vec!["int64_t obj".to_string()];
+    for (i, _param) in method.params.iter().enumerate() {
+        fnptr_params.push(format!("int64_t param{}", i));
+    }
+    let fnptr_params_str = fnptr_params.join(", ");
+
+    // 获取返回值的 C FFI 类型 - 也必须是 int64_t
+    let return_type = "int64_t".to_string();
+
+    // .h中的函数指针类型和注册函数定义
+    let regist_decl = format!("typedef {} (*{})({});
+API_EXPORT void {}_register(FFI_{} obj, {} fnptr);
+API_EXPORT void {}_regist(int64_t {});
+",
+        return_type, fun_ptr_type_str, fnptr_params_str,
+        fun_ptr_type_str, class.unwrap().type_str, fun_ptr_type_str,
+        fun_ptr_type_str, method.name
+    );
+
+    // .cpp中的函数指针变量定义（包含成员变量和 Port 集合）
+    let regist_var_decl = format!("    {} {} = nullptr;
+
+// 使用函数内静态变量确保线程安全的初始化
+static std::set<int64_t>& get{}Set() {{
+    static std::set<int64_t> callbackSet;
+    return callbackSet;
+}}
+
+static std::mutex& get{}Mutex() {{
+    static std::mutex callbackMutex;
+    return callbackMutex;
+}}
+
+", fun_ptr_type_str, fun_ptr_var_str, port_var_str, port_var_str);
+
+    // .cpp中的注册函数实现
+    let regist_impl = format!("API_EXPORT void {}_register(FFI_{} obj, {} fnptr) {{
+    if (obj && fnptr) {{
+        static_cast<Impl_{}*>(obj)->{} = fnptr;
+    }}
+}}
+API_EXPORT void {}_regist(int64_t {}){{
+    // 参数校验：确保 port 有效（Dart port 通常不会是 0）
+    if ({} == 0) {{
+        return;
+    }}
+
+    // 使用互斥锁保护 set 的访问，防止多线程竞争导致内部结构损坏
+    std::lock_guard<std::mutex> lock(get{}Mutex());
+    get{}Set().insert({});
+}};
+",
+        fun_ptr_type_str, class.unwrap().type_str, fun_ptr_type_str,
+        class.unwrap().type_str, fun_ptr_var_str,
+        fun_ptr_type_str, method.name,
+        method.name,
+        port_var_str,
+        port_var_str, method.name,
+    );
 
     return (regist_decl, regist_var_decl, regist_impl);
 }

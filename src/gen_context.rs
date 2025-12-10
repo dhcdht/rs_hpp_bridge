@@ -166,6 +166,10 @@ pub struct Method {
     pub is_static: bool,
     /// 注释
     pub comment_str: Option<String>,
+    /// callback 是否在原线程同步调用（用于回调类的方法）
+    /// true = 同步调用（使用函数指针）
+    /// false = 异步调用（使用 SendPort，默认）
+    pub is_sync_callback: bool,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]

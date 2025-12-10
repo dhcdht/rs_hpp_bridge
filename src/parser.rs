@@ -24,6 +24,28 @@ fn simplify_type_for_naming(type_str: &str) -> String {
     }
 }
 
+/// 根据注释判断callback是否为同步调用
+/// 检查注释中的 @callback_sync 或 @callback_async 标记
+/// 如果没有标记，默认为异步(使用 SendPort)
+fn is_sync_callback_from_comment(comment: &Option<String>) -> bool {
+    if let Some(comment_text) = comment {
+        let comment_lower = comment_text.to_lowercase();
+
+        // 明确标记为同步
+        if comment_lower.contains("@callback_sync") {
+            return true;
+        }
+
+        // 明确标记为异步
+        if comment_lower.contains("@callback_async") {
+            return false;
+        }
+    }
+
+    // 默认行为：异步调用 (使用 SendPort)
+    false
+}
+
 pub fn parse_hpp(out_gen_context: &mut GenContext, hpp_path: &str, include_path: &str, cpp_std: &str, extra_clang_args: &[String]) {
     let clang = clang::Clang::new().unwrap();
     let index = clang::Index::new(&clang, true, false);
@@ -719,21 +741,21 @@ fn handle_clang_Method(out_hpp_element: &mut HppElement, entity: &clang::Entity<
     // 检查是否为静态方法
     method.is_static = entity.is_static_method();
 
+    // 检查是否为同步回调（仅对回调类的方法有效）
+    if let HppElement::Class(class) = out_hpp_element {
+        if class.is_callback() {
+            method.is_sync_callback = is_sync_callback_from_comment(&method.comment_str);
+        }
+    }
+
     // 跳过返回值类型被忽略的方法
     if method.return_type.type_kind == TypeKind::Ignored {
         return;
     }
 
-    // todo: dhcdht 跳过 callback 中有返回值的方法，这种情况在 dart 中无法处理
-    match out_hpp_element {
-        HppElement::Class(class) => {
-            if class.class_type == ClassType::Callback && method.return_type.type_kind != TypeKind::Void {
-                println!("dart 中不支持 callback 中有返回值的方法，所以跳过这个方法: {}", method.name);
-                return;
-            }
-        },
-        _ => {},
-    }
+    // Callback 方法现在支持所有返回值类型了
+    // - void 返回值使用异步调用（Dart_PostCObject_DL）
+    // - 非 void 返回值使用同步调用（函数指针）
 
     let mut element = HppElement::Method(method);
     for child in entity.get_children() {

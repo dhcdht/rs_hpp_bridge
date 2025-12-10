@@ -159,6 +159,16 @@ class {} implements Finalizable {{
                 dart_file.write(convenience_methods.as_bytes());
             }
 
+            // 回调类的静态包装函数（必须在类结束之前生成）
+            let mut init_str = "".to_string();
+            if class.is_callback() {
+                local_dart_gen_context.cur_class = Some(class);
+                for hpp_element in &class.children {
+                    gen_dart_fun_for_regist_callback(gen_context, hpp_element, gen_out_dir, Some(local_dart_gen_context), &mut init_str);
+                }
+                local_dart_gen_context.cur_class = None;
+            }
+
             {
             // 公共尾
             let dart_file_footer = local_dart_gen_context.cur_file.as_mut().unwrap();
@@ -166,16 +176,10 @@ class {} implements Finalizable {{
             dart_file_footer.write(class_footer.as_bytes());
             }
 
-            // 回调类的特殊内容
+            // 回调类的 init 函数（在类结束之后生成）
             if class.is_callback() {
-                let mut init_str = "".to_string();
-                local_dart_gen_context.cur_class = Some(class);
-                for hpp_element in &class.children {
-                    gen_dart_fun_for_regist_callback(gen_context, hpp_element, gen_out_dir, Some(local_dart_gen_context), &mut init_str);
-                }
-                local_dart_gen_context.cur_class = None;
                 // 用于注册dart函数实现的函数
-                let callback_footer = format!("void _{}_init() {{\n{}\n}}\n", class.type_str, init_str);
+                let callback_footer = format!("\nvoid _{}_init() {{\n{}\n}}\n", class.type_str, init_str);
                 let dart_file_footer = local_dart_gen_context.cur_file.as_mut().unwrap();
                 dart_file_footer.write(callback_footer.as_bytes());
             }
@@ -264,8 +268,30 @@ import '{}';
         }
         HppElement::Class(class) => {
             let local_ffiapi_gen_context = ffiapi_gen_context.unwrap();
-            
+
             local_ffiapi_gen_context.cur_class = Some(class);
+
+            // 如果是回调类且有同步回调（有返回值的方法），生成 setCallbackResult FFI 绑定
+            if class.is_callback() {
+                let has_sync_callback = class.children.iter().any(|child| {
+                    if let HppElement::Method(m) = child {
+                        m.method_type == MethodType::Normal && m.return_type.type_kind != TypeKind::Void
+                    } else {
+                        false
+                    }
+                });
+
+                if has_sync_callback {
+                    let ffiapi_file = local_ffiapi_gen_context.cur_file.as_mut().unwrap();
+                    let set_result_api = format!("late final ptr_ffi_FFI_{}_setCallbackResult = {}_dylib.lookup<NativeFunction<Void Function(Int64, Int64)>>('FFI_{}_setCallbackResult');
+late final ffi_FFI_{}_setCallbackResult = ptr_ffi_FFI_{}_setCallbackResult.asFunction<void Function(int, int)>();
+",
+                        class.type_str, gen_context.module_name, class.type_str,
+                        class.type_str, class.type_str);
+                    ffiapi_file.write(set_result_api.as_bytes());
+                }
+            }
+
             for hpp_element in &class.children {
                 gen_dart_api(gen_context, hpp_element, gen_out_dir, Some(local_ffiapi_gen_context));
             }
@@ -336,7 +362,7 @@ fn gen_dart_fun_for_regist_callback<'a>(gen_context: &GenContext, hpp_element: &
 
             let (local_init_str, dart_fun_impl) = get_dart_fun_for_regist_callback(local_dart_gen_context.cur_class, method);
             init_str.push_str(&local_init_str);
-            // dart_file.write(dart_fun_impl.as_bytes());
+            dart_file.write(dart_fun_impl.as_bytes());
         }
         _ => {
             unimplemented!("gen_dart_api_for_callback_fun: unknown child");
@@ -496,22 +522,37 @@ fn get_str_dart_fun_callback_block(class: Option<&Class>, method: &Method) -> St
         return "".to_string();
     }
 
-    let port_args_str = get_str_port_fun_params_impl(class, method);
-    let params_str = get_str_dart_fun_params_decl(class, method);
-    let block_str = format!("    static final {}_port = ReceivePort()..listen((data) {{
+    // 判断是否需要同步调用（使用 @callback_sync 注释标记）
+    let needs_sync_call = method.is_sync_callback;
+
+    if needs_sync_call {
+        // 同步 callback（使用函数指针）：生成静态回调函数和 block
+        let params_str = get_str_dart_fun_params_decl(class, method);
+
+        // 为同步回调只生成 block 定义，不生成 ReceivePort
+        // 静态函数会在 _MyCallback_init 中使用 Pointer.fromFunction 生成
+        let block_str = format!("    {} Function({})? {}_block = null;",
+            get_str_dart_fun_type(&method.return_type), params_str, method.name,
+        );
+        return block_str;
+    } else {
+        // 异步 callback（void 返回值）：生成 ReceivePort 和 block
+        let port_args_str = get_str_port_fun_params_impl(class, method);
+        let params_str = get_str_dart_fun_params_decl(class, method);
+        let block_str = format!("    static final {}_port = ReceivePort()..listen((data) {{
         final args = data as List;
         final nativePtr = Pointer<Void>.fromAddress(args[0]);
         final obj = {}.nativeToObjMap[nativePtr]?.target;
         obj?.{}({});
     }});
     {} Function({})? {}_block = null;",
-        method.name,
-        cur_class_name, 
-        method.name, port_args_str,
-        get_str_dart_fun_type(&method.return_type), params_str, method.name,
-    );
-
-    return block_str;
+            method.name,
+            cur_class_name,
+            method.name, port_args_str,
+            get_str_dart_fun_type(&method.return_type), params_str, method.name,
+        );
+        return block_str;
+    }
 }
 
 fn get_str_port_fun_params_impl(class: Option<&Class>, method: &Method) -> String {
@@ -533,12 +574,38 @@ fn get_str_port_fun_params_impl(class: Option<&Class>, method: &Method) -> Strin
         if param.field_type.type_kind == TypeKind::Class {
             param_strs.push(format!("{}.FromNative(Pointer<Void>.fromAddress(args[{}]))", get_str_dart_fun_type(&param.field_type), index));
         }
-        else if param.field_type.type_kind == TypeKind::StdPtr 
+        else if param.field_type.type_kind == TypeKind::StdPtr
         || param.field_type.type_kind == TypeKind::StdVector
         {
             param_strs.push(format!("{}.FromNative(Pointer<Void>.fromAddress(args[{}]))", get_str_dart_fun_type(&param.field_type), index));
         }
-        else if param.field_type.type_kind == TypeKind::Char 
+        else if param.field_type.type_kind == TypeKind::Char
+        {
+            param_strs.push(format!{"(args[{}] as String).toNativeUtf8().cast()", index});
+        }
+        else {
+            param_strs.push(format!("args[{}]", index));
+        }
+    }
+
+    return param_strs.join(", ");
+}
+
+/// 为同步回调生成参数解析代码（从 args[3] 开始，因为前3个是 request_id, method_id, this）
+fn get_str_port_fun_params_impl_for_sync_callback(class: Option<&Class>, method: &Method) -> String {
+    let mut param_strs = Vec::new();
+    for i in 0..method.params.len() {
+        let index = i+3;  // 前3个是 request_id, method_id, this
+        let param = &method.params[i];
+        if param.field_type.type_kind == TypeKind::Class {
+            param_strs.push(format!("{}.FromNative(Pointer<Void>.fromAddress(args[{}]))", get_str_dart_fun_type(&param.field_type), index));
+        }
+        else if param.field_type.type_kind == TypeKind::StdPtr
+        || param.field_type.type_kind == TypeKind::StdVector
+        {
+            param_strs.push(format!("{}.FromNative(Pointer<Void>.fromAddress(args[{}]))", get_str_dart_fun_type(&param.field_type), index));
+        }
+        else if param.field_type.type_kind == TypeKind::Char
         {
             param_strs.push(format!{"(args[{}] as String).toNativeUtf8().cast()", index});
         }
@@ -575,10 +642,39 @@ fn get_str_dart_fun_body_for_callback(class: Option<&Class>, method: &Method) ->
         }
         MethodType::Constructor => {
             body_prefix.push_str(&format!("_nativePtr = {}(", ffiapi_c_method_name));
+
+            // 为同步回调方法生成 Pointer.fromFunction 注册代码
+            let mut sync_callback_registrations = String::new();
+            if let Some(cur_class) = class {
+                if cur_class.is_callback() {
+                    for child in &cur_class.children {
+                        if let HppElement::Method(m) = child {
+                            if m.method_type == MethodType::Normal && m.is_sync_callback {
+                                // 生成函数指针类型签名
+                                let mut ffi_type_params = vec!["Int64".to_string()]; // this 指针
+                                for param in &m.params {
+                                    ffi_type_params.push("Int64".to_string()); // 所有参数都是 int64
+                                }
+                                let ffi_signature = format!("Int64 Function({})", ffi_type_params.join(", "));
+
+                                // 生成默认返回值（必须是编译时常量）
+                                // 对于所有类型都使用 0，在 static wrapper 中进行适当的类型转换
+                                let default_value = "0".to_string();
+
+                                sync_callback_registrations.push_str(&format!("\n        final {}_ptr = Pointer.fromFunction<{}>({}._{}_{}_static, {});",
+                                    m.name, ffi_signature, cur_class_name, cur_class_name, m.name, default_value));
+                                sync_callback_registrations.push_str(&format!("\n        FFI_{}_{}_FnPtr_register(_nativePtr, {}_ptr);",
+                                    cur_class_name, m.name, m.name));
+                            }
+                        }
+                    }
+                }
+            }
+
             body_suffix.push_str(&format!(");
         nativeLifecycleLink();
-        nativeToObjMap[_nativePtr] = WeakReference<{}>(this);
-        _{}_init();", cur_class_name, cur_class_name));
+        nativeToObjMap[_nativePtr] = WeakReference<{}>(this);{}
+        _{}_init();", cur_class_name, sync_callback_registrations, cur_class_name));
         }
         MethodType::Destructor => {
             body_prefix.push_str(&format!("nativeLifecycleUnlink();\n\t\treturn {}(", ffiapi_c_method_name));
@@ -589,11 +685,14 @@ fn get_str_dart_fun_body_for_callback(class: Option<&Class>, method: &Method) ->
         }
     }
 
-    let fun_body = format!("{}{}{}", 
+    let fun_body = format!("{}{}{}",
         body_prefix, params_str, body_suffix);
 
     return fun_body;
 }
+
+// 已删除 get_str_dart_ffi_params_decl_for_sync_callback 和 get_str_dart_sync_callback_wrapper
+// 同步回调现在通过 ReceivePort 和 setCallbackResult 实现，不再需要 Pointer.fromFunction
 
 fn get_str_dart_fun_params_decl(class: Option<&Class>, method: &Method) -> String {
     let mut param_strs = Vec::new();
@@ -663,40 +762,157 @@ fn get_dart_fun_for_regist_callback(class: Option<&Class>, method: &Method) -> (
     } else {
         ""
     };
-    // native函数指针类型的名字
-    let native_fun_type_name = format!("FFI_{}_{}", cur_class_name, method.name);
-    // 注册函数的名字
-    let native_regist_fun_name = format!("{}_regist", native_fun_type_name);
-    // 实现函数的名字
-    let dart_callback_fun_name = format!("_{}_{}", cur_class_name, method.name);
-    let params_decl_str = get_str_dart_fun_params_decl_for_regist_callback(class, method);
-    let params_impl_str = get_str_dart_fun_params_impl_for_regist_callback(class, method);
 
-    // 生成用于初始化的内容
-    let exception_default_value_str = get_str_dart_api_exception_default_value(&method.return_type);
-    let exception_value_str = if exception_default_value_str.is_empty() {
-        "".to_string()
+    // 判断是否需要同步调用（使用 is_sync_callback 标志）
+    let needs_sync_call = method.is_sync_callback;
+
+    if needs_sync_call {
+        // 同步 callback（使用函数指针）：生成静态包装函数和注册代码
+        let dart_callback_fun_name = format!("_{}_{}_static", cur_class_name, method.name);
+
+        // 为每个同步回调方法生成一个静态包装函数
+        // 这个函数签名必须匹配 C++ 的函数指针签名：(int64 obj, int64 param1, ...)
+        let mut ffi_param_strs = vec!["int objPtr".to_string()];  // this 指针作为第一个参数
+        let mut call_param_strs = Vec::new();
+
+        for param in &method.params {
+            // FFI 层所有参数都是 int (int64_t 映射)
+            ffi_param_strs.push(format!("int {}_raw", param.name));
+
+            // 根据类型转换参数
+            let converted_param = match param.field_type.type_kind {
+                TypeKind::Int64 | TypeKind::Char | TypeKind::Bool => {
+                    format!("{}_raw", param.name)
+                }
+                TypeKind::Float => {
+                    // 从 int64 位模式重新解释为 float
+                    format!("(() {{ final p = malloc<Int64>(); p.value = {}_raw; final f = p.cast<Float>().value; malloc.free(p); return f; }})()", param.name)
+                }
+                TypeKind::Double => {
+                    // 从 int64 位模式重新解释为 double
+                    format!("(() {{ final p = malloc<Int64>(); p.value = {}_raw; final d = p.cast<Double>().value; malloc.free(p); return d; }})()", param.name)
+                }
+                TypeKind::String => {
+                    // String 通过指针传递，需要转换
+                    format!("Pointer<Utf8>.fromAddress({}_raw).toDartString()", param.name)
+                }
+                _ => format!("{}_raw", param.name),
+            };
+            call_param_strs.push(converted_param);
+        }
+
+        let ffi_params_str = ffi_param_strs.join(", ");
+        let call_params_str = call_param_strs.join(", ");
+
+        // 生成默认返回值
+        let default_return = match method.return_type.type_kind {
+            TypeKind::Int64 => "0",
+            TypeKind::Float | TypeKind::Double => "0.0",
+            TypeKind::Bool => "false",
+            _ => "0",
+        };
+
+        // 生成返回值转换代码和函数体
+        let (callback_body, return_stmt) = match method.return_type.type_kind {
+            TypeKind::Void => {
+                // void 返回：不需要 result 变量，直接调用函数
+                let body = format!("      obj.{}_block!({});", method.name, call_params_str);
+                let ret = "return 0;".to_string(); // FFI 函数必须返回 int64
+                (body, ret)
+            }
+            TypeKind::Int64 | TypeKind::Char => {
+                let body = format!("      final result = obj.{}_block!({});", method.name, call_params_str);
+                let ret = "return result;".to_string();
+                (body, ret)
+            }
+            TypeKind::Bool => {
+                let body = format!("      final result = obj.{}_block!({});", method.name, call_params_str);
+                let ret = "return (result ? 1 : 0);".to_string();
+                (body, ret)
+            }
+            TypeKind::Float => {
+                let body = format!("      final result = obj.{}_block!({});", method.name, call_params_str);
+                let ret = "return (() { final p = malloc<Float>(); p.value = result; final i = p.cast<Int64>().value; malloc.free(p); return i; })();".to_string();
+                (body, ret)
+            }
+            TypeKind::Double => {
+                let body = format!("      final result = obj.{}_block!({});", method.name, call_params_str);
+                let ret = "return (() { final p = malloc<Double>(); p.value = result; final i = p.cast<Int64>().value; malloc.free(p); return i; })();".to_string();
+                (body, ret)
+            }
+            _ => {
+                let body = format!("      final result = obj.{}_block!({});", method.name, call_params_str);
+                let ret = "return result;".to_string();
+                (body, ret)
+            }
+        };
+
+        // 生成静态包装函数
+        let dart_fun_impl = format!("
+  // 同步回调静态包装函数（供 C++ 通过函数指针调用）
+  static int {}({}) {{
+    final nativePtr = Pointer<Void>.fromAddress(objPtr);
+    final obj = {}.nativeToObjMap[nativePtr]?.target;
+
+    if (obj != null && obj.{}_block != null) {{
+{}
+      {}
+    }}
+    return 0;  // 默认返回值
+  }}
+",
+            dart_callback_fun_name, ffi_params_str,
+            cur_class_name,
+            method.name,
+            callback_body,
+            return_stmt
+        );
+
+        // 生成注册代码：使用 Pointer.fromFunction 创建函数指针并注册到 C++
+        let register_fun_name = format!("FFI_{}_{}_FnPtr_register", cur_class_name, method.name);
+        let init_str = format!("
+    // 为每个对象注册同步回调函数指针
+    // 注意：这在构造函数中完成，见 get_str_dart_fun_body_for_callback
+");
+
+        return (init_str, dart_fun_impl);
     } else {
-        format!(", {}", exception_default_value_str)
-    };
-    let init_str = format!("    
+        // 异步 callback（void 返回值）：使用原有的 port 注册逻辑
+        // native函数指针类型的名字
+        let native_fun_type_name = format!("FFI_{}_{}", cur_class_name, method.name);
+        // 注册函数的名字
+        let native_regist_fun_name = format!("{}_regist", native_fun_type_name);
+        // 实现函数的名字
+        let dart_callback_fun_name = format!("_{}_{}", cur_class_name, method.name);
+        let params_decl_str = get_str_dart_fun_params_decl_for_regist_callback(class, method);
+        let params_impl_str = get_str_dart_fun_params_impl_for_regist_callback(class, method);
+
+        // 生成用于初始化的内容
+        let exception_default_value_str = get_str_dart_api_exception_default_value(&method.return_type);
+        let exception_value_str = if exception_default_value_str.is_empty() {
+            "".to_string()
+        } else {
+            format!(", {}", exception_default_value_str)
+        };
+        let init_str = format!("
     {{
     {}({}.{}_port.sendPort.nativePort);
     }}
-", 
-        native_regist_fun_name, cur_class_name, method.name,
-    );
+",
+            native_regist_fun_name, cur_class_name, method.name,
+        );
 
-    // 生成dart回调函数内容
-    let dart_fun_impl = format!("{} {}({}) {{
+        // 生成dart回调函数内容
+        let dart_fun_impl = format!("{} {}({}) {{
     return {}.nativeToObjMap[native]!.target!.{}({});
 }}
 ",
-        get_str_dart_api_type(&method.return_type), dart_callback_fun_name, params_decl_str,
-        cur_class_name, method.name, params_impl_str,
-    );
+            get_str_dart_api_type(&method.return_type), dart_callback_fun_name, params_decl_str,
+            cur_class_name, method.name, params_impl_str,
+        );
 
-    return (init_str, dart_fun_impl);
+        return (init_str, dart_fun_impl);
+    }
 }
 
 fn get_str_dart_fun_params_decl_for_regist_callback(class: Option<&Class>, method: &Method) -> String {
@@ -716,6 +932,16 @@ fn get_str_dart_fun_params_impl_for_regist_callback(class: Option<&Class>, metho
     for param in &method.params {
         if param.field_type.type_kind == TypeKind::Class {
             param_strs.push(format!("{}.FromNative({})", param.field_type.type_str, param.name));
+        } else if param.field_type.type_kind == TypeKind::String {
+            // String parameters come as Pointer<Utf8>, need to convert to Dart String
+            param_strs.push(format!("{}.toDartString()", param.name));
+        } else if param.field_type.type_kind == TypeKind::StdVector
+            || param.field_type.type_kind == TypeKind::StdMap
+            || param.field_type.type_kind == TypeKind::StdUnorderedMap
+            || param.field_type.type_kind == TypeKind::StdSet
+            || param.field_type.type_kind == TypeKind::StdUnorderedSet {
+            // STL containers need to be wrapped with FromNative
+            param_strs.push(format!("{}.FromNative({})", get_str_dart_fun_type(&param.field_type), param.name));
         } else {
             param_strs.push(format!("{}", param.name));
         }
@@ -829,23 +1055,77 @@ fn get_str_dart_api_for_regist_callback(gen_context: &GenContext, class: Option<
     if let Some(cur_class) = class {
         cur_class_name = &cur_class.type_str;
     }
-    // native函数指针类型的名字
-    let native_fun_type_name = format!("FFI_{}_{}", cur_class_name, method.name);
-    // 注册函数的名字
-    let native_regist_fun_name = format!("{}_regist", native_fun_type_name);
-    // 参数列表
-    let params_str = get_str_native_api_params_decl(class, method);
 
-    let dart_api_str = format!("typedef {} = {} Function({});
+    // 判断是否需要同步调用（使用 is_sync_callback 标志）
+    let needs_sync_call = method.is_sync_callback;
+
+    if needs_sync_call {
+        // 同步 callback（使用函数指针）：生成 _register 和 _regist 函数的 FFI API 绑定
+        // 函数指针类型名
+        let native_fun_type_name = format!("FFI_{}_{}_FnPtr", cur_class_name, method.name);
+
+        // 构造函数指针签名（Int64 Function(Int64, Int64, ...)）
+        let mut ffi_type_params = vec!["Int64".to_string()]; // this 指针
+        for _param in &method.params {
+            ffi_type_params.push("Int64".to_string()); // 所有参数都是 int64
+        }
+        let ffi_signature = format!("Int64 Function({})", ffi_type_params.join(", "));
+
+        // 生成 _register 函数的 FFI API 绑定（接受函数指针）
+        let register_fun_name = format!("{}_register", native_fun_type_name);
+        let register_api = format!("late final ptr_{} = {}_dylib.lookup<NativeFunction<Void Function(Pointer<Void>, Pointer<NativeFunction<{}>>)>>('{}');
+late final {} = ptr_{}.asFunction<void Function(Pointer<Void>, Pointer<NativeFunction<{}>>)>();
+",
+            register_fun_name, gen_context.module_name, ffi_signature, register_fun_name,
+            register_fun_name, register_fun_name, ffi_signature,
+        );
+
+        // 生成 _regist 函数的 FFI API 绑定（注册 SendPort，用于异步发送请求）
+        let regist_fun_name = format!("{}_regist", native_fun_type_name);
+        let regist_api = format!("late final ptr_{} = {}_dylib.lookup<NativeFunction<Void Function(Int64)>>('{}');
+late final {} = ptr_{}.asFunction<void Function(int)>();
+",
+            regist_fun_name, gen_context.module_name, regist_fun_name,
+            regist_fun_name, regist_fun_name,
+        );
+
+        return format!("{}{}", register_api, regist_api);
+    } else {
+        // 异步 callback（void 返回值）：使用原有的 _regist 逻辑
+        // native函数指针类型的名字
+        let native_fun_type_name = format!("FFI_{}_{}", cur_class_name, method.name);
+        // 注册函数的名字
+        let native_regist_fun_name = format!("{}_regist", native_fun_type_name);
+        // 参数列表
+        let params_str = get_str_native_api_params_decl(class, method);
+
+        let dart_api_str = format!("typedef {} = {} Function({});
 late final ptr_{} = {}_dylib.lookup<NativeFunction<Void Function(Int64)>>('{}');
 late final {} = ptr_{}.asFunction<void Function(int)>();
-", 
-        native_fun_type_name, get_str_native_api_type(&method.return_type), params_str,
-        native_regist_fun_name, gen_context.module_name, native_regist_fun_name,
-        native_regist_fun_name, native_regist_fun_name,
-    );
+",
+            native_fun_type_name, get_str_native_api_type(&method.return_type), params_str,
+            native_regist_fun_name, gen_context.module_name, native_regist_fun_name,
+            native_regist_fun_name, native_regist_fun_name,
+        );
 
-    return dart_api_str;
+        return dart_api_str;
+    }
+}
+
+/// 生成 native callback 函数签名（用于 FFI API 中的 NativeFunction 类型）
+/// 例如：Int64 Function(Pointer<Void>, Int64, Int64)
+fn get_str_native_callback_function_signature(class: Option<&Class>, method: &Method) -> String {
+    let mut param_strs = vec!["Pointer<Void>".to_string()];
+
+    // 添加方法参数
+    for param in &method.params {
+        param_strs.push(get_str_native_api_type(&param.field_type));
+    }
+
+    format!("{} Function({})",
+        get_str_native_api_type(&method.return_type),
+        param_strs.join(", ")
+    )
 }
 
 /// 返回dart api中的参数列表

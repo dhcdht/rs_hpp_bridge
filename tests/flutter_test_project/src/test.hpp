@@ -25,6 +25,22 @@ public:
     virtual void onGetStruct(SimpleStruct s)= 0;
     virtual void onGetVector(std::vector<float> v) = 0;
     virtual void onGetConst(const unsigned char* value, size_t size) = 0;
+
+    // 带返回值的 callback 方法（测试新功能）
+    /// @callback_sync - 这个方法在同一线程中同步调用
+    virtual int onComputeSum(int a, int b) = 0;
+    /// @callback_sync
+    virtual double onComputeAverage(double x, double y) = 0;
+    /// @callback_sync
+    virtual bool onShouldContinue() = 0;
+
+    // 同步 + 无返回值 (使用函数指针，但不需要返回值)
+    /// @callback_sync
+    virtual void onLogMessage(std::string message) = 0;
+
+    // 异步 + 有返回值 (使用 ReceivePort，通过另一个消息返回结果)
+    // 注意：不添加 @callback_sync 注解，所以使用 ReceivePort
+    virtual int onCalculateAsync(int x, int y) = 0;
 };
 
 class TestClass {
@@ -78,6 +94,17 @@ public:
 
     // Test string-to-string map
     std::map<std::string, std::string> testStdMapStringString(std::map<std::string, std::string> m);
+
+    // Test callback methods with return values
+    int testCallbackComputeSum(int a, int b);
+    double testCallbackComputeAverage(double x, double y);
+    bool testCallbackShouldContinue();
+
+    // Test sync callback with void return
+    void testCallbackLogMessage(std::string message);
+
+    // Test async callback with return value
+    int testCallbackCalculateAsync(int x, int y);
 };
 
 #endif // TEST_HPP

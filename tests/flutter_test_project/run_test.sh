@@ -30,8 +30,14 @@ echo_error() {
 
 # 检测并设置架构
 detect_arch() {
-    local arch=$(uname -m)
-    echo_info "检测到系统架构: $arch"
+    # 支持通过 FORCE_ARCH 环境变量强制指定架构
+    if [[ -n "$FORCE_ARCH" ]]; then
+        local arch="$FORCE_ARCH"
+        echo_info "使用强制指定的架构: $arch"
+    else
+        local arch=$(uname -m)
+        echo_info "检测到系统架构: $arch"
+    fi
 
     if [[ "$arch" == "arm64" ]]; then
         echo_info "使用 ARM64 架构运行"
@@ -97,7 +103,14 @@ install_flutter_deps() {
 install_pod_deps() {
     echo_info "步骤 5/7: 安装 CocoaPods 依赖"
     cd "$SCRIPT_DIR/example/macos"
-    if ! pod install; then
+
+    # 根据架构设置 CocoaPods 的架构配置
+    if [[ "$ARCH_PREFIX" == "arch -arm64" ]]; then
+        # arm64 架构：在 Podfile 中排除 x86_64
+        export ARCHS="arm64"
+    fi
+
+    if ! $ARCH_PREFIX pod install; then
         echo_warn "CocoaPods 安装有警告，但继续执行..."
     fi
     echo_info "✓ CocoaPods 依赖处理完成"
@@ -107,10 +120,30 @@ install_pod_deps() {
 build_macos() {
     echo_info "步骤 6/7: 构建 macOS 应用"
     cd "$SCRIPT_DIR/example"
-    if ! $ARCH_PREFIX fvm flutter build macos --debug; then
-        echo_error "macOS 应用构建失败"
-        exit 1
+
+    # 根据架构设置不同的构建配置
+    if [[ "$ARCH_PREFIX" == "arch -arm64" ]]; then
+        # arm64 架构：清理之前的构建产物并强制 arm64 架构
+        echo_info "清理之前的 x86_64 构建产物..."
+        $ARCH_PREFIX fvm flutter clean
+
+        # 设置 Xcode 环境变量强制使用 arm64 架构
+        export ARCHS="arm64"
+        export ONLY_ACTIVE_ARCH="NO"
+        export VALID_ARCHS="arm64"
+
+        if ! $ARCH_PREFIX fvm flutter build macos --debug; then
+            echo_error "macOS 应用构建失败"
+            exit 1
+        fi
+    else
+        # x86_64 架构或默认架构
+        if ! $ARCH_PREFIX fvm flutter build macos --debug; then
+            echo_error "macOS 应用构建失败"
+            exit 1
+        fi
     fi
+
     echo_info "✓ macOS 应用构建成功"
 }
 

@@ -193,3 +193,60 @@ std::map<std::string, std::string> TestClass::testStdMapStringString(std::map<st
     }
     return result;
 }
+
+// Test callback methods with return values
+int TestClass::testCallbackComputeSum(int a, int b) {
+    std::cout << "C++: Testing callback onComputeSum(" << a << ", " << b << ")" << std::endl;
+    if (current_callback) {
+        std::cout << "C++: About to call current_callback->onComputeSum" << std::endl;
+        std::cout.flush();
+        int result = current_callback->onComputeSum(a, b);
+        std::cout << "C++: Callback returned: " << result << std::endl;
+        return result;
+    }
+    std::cout << "C++: No callback registered" << std::endl;
+    return 0;
+}
+
+double TestClass::testCallbackComputeAverage(double x, double y) {
+    std::cout << "C++: Testing callback onComputeAverage(" << x << ", " << y << ")" << std::endl;
+    if (current_callback) {
+        double result = current_callback->onComputeAverage(x, y);
+        std::cout << "C++: Callback returned: " << result << std::endl;
+        return result;
+    }
+    std::cout << "C++: No callback registered" << std::endl;
+    return 0.0;
+}
+
+bool TestClass::testCallbackShouldContinue() {
+    std::cout << "C++: Testing callback onShouldContinue()" << std::endl;
+    if (current_callback) {
+        bool result = current_callback->onShouldContinue();
+        std::cout << "C++: Callback returned: " << (result ? "true" : "false") << std::endl;
+        return result;
+    }
+    std::cout << "C++: No callback registered" << std::endl;
+    return false;
+}
+
+void TestClass::testCallbackLogMessage(std::string message) {
+    std::cout << "C++: Testing sync callback onLogMessage with message: " << message << std::endl;
+    if (current_callback) {
+        current_callback->onLogMessage(message);
+        std::cout << "C++: Sync void callback completed" << std::endl;
+    } else {
+        std::cout << "C++: No callback registered" << std::endl;
+    }
+}
+
+int TestClass::testCallbackCalculateAsync(int x, int y) {
+    std::cout << "C++: Testing async callback onCalculateAsync(" << x << ", " << y << ")" << std::endl;
+    if (current_callback) {
+        int result = current_callback->onCalculateAsync(x, y);
+        std::cout << "C++: Async callback returned: " << result << std::endl;
+        return result;
+    }
+    std::cout << "C++: No callback registered" << std::endl;
+    return 0;
+}

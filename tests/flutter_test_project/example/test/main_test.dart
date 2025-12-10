@@ -205,6 +205,134 @@ void main() {
       // Check C++ console output for "Got int from callback: 999"
     });
 
+    test('test Callback with Return Values (Sync)', () async {
+      // Initialize the Dart API
+      final _initResult = ffi_Dart_InitializeApiDL(NativeApi.initializeApiDLData);
+      if (_initResult != 0) {
+        throw Exception('Failed to initialize Dart API: $_initResult');
+      }
+
+      final t = testClassInstance;
+      final callbackImpl = MyCallback.Constructor();
+
+      // Test onComputeSum - returns int
+      var onComputeSum_called = false;
+      callbackImpl.onComputeSum_block = (a, b) {
+        print("Dart: onComputeSum called with a=$a, b=$b");
+        onComputeSum_called = true;
+        return a + b;
+      };
+
+      // Test onComputeAverage - returns double
+      var onComputeAverage_called = false;
+      callbackImpl.onComputeAverage_block = (x, y) {
+        print("Dart: onComputeAverage called with x=$x, y=$y");
+        onComputeAverage_called = true;
+        return (x + y) / 2.0;
+      };
+
+      // Test onShouldContinue - returns bool
+      var onShouldContinue_called = false;
+      callbackImpl.onShouldContinue_block = () {
+        print("Dart: onShouldContinue called");
+        onShouldContinue_called = true;
+        return true;
+      };
+
+      final callbackPtr = StdPtr_MyCallback.Constructor(callbackImpl);
+      t.registerCallback(callbackPtr);
+
+      // Verify callback blocks are set
+      expect(callbackImpl.onComputeSum_block, isNotNull);
+      expect(callbackImpl.onComputeAverage_block, isNotNull);
+      expect(callbackImpl.onShouldContinue_block, isNotNull);
+
+      // Test onComputeSum callback
+      final sumResult = t.testCallbackComputeSum(10, 20);
+      expect(onComputeSum_called, isTrue);
+      expect(sumResult, 30);
+      print("Dart: onComputeSum test passed - returned $sumResult");
+
+      // Test onComputeAverage callback
+      final avgResult = t.testCallbackComputeAverage(10.0, 20.0);
+      expect(onComputeAverage_called, isTrue);
+      expect(avgResult, 15.0);
+      print("Dart: onComputeAverage test passed - returned $avgResult");
+
+      // Test onShouldContinue callback
+      final shouldContinue = t.testCallbackShouldContinue();
+      expect(onShouldContinue_called, isTrue);
+      expect(shouldContinue, isTrue);
+      print("Dart: onShouldContinue test passed - returned $shouldContinue");
+    });
+
+    test('test Callback Sync with Void Return', () async {
+      // Test sync callback with void return: onLogMessage
+      final _initResult = ffi_Dart_InitializeApiDL(NativeApi.initializeApiDLData);
+      if (_initResult != 0) {
+        throw Exception('Failed to initialize Dart API: $_initResult');
+      }
+
+      final t = testClassInstance;
+      final callbackImpl = MyCallback.Constructor();
+
+      // Test onLogMessage - sync callback with void return
+      var onLogMessage_called = false;
+      var onLogMessage_message = "";
+      callbackImpl.onLogMessage_block = (message) {
+        print("Dart: onLogMessage called with message: $message");
+        onLogMessage_called = true;
+        onLogMessage_message = message;
+      };
+
+      final callbackPtr = StdPtr_MyCallback.Constructor(callbackImpl);
+      t.registerCallback(callbackPtr);
+
+      // Verify callback block is set
+      expect(callbackImpl.onLogMessage_block, isNotNull);
+
+      // Test onLogMessage callback - should be synchronous
+      t.testCallbackLogMessage("Test sync void message");
+      // No need for await - it's synchronous!
+      expect(onLogMessage_called, isTrue);
+      expect(onLogMessage_message, "Test sync void message");
+      print("Dart: onLogMessage test passed - message: $onLogMessage_message");
+    });
+
+    test('test Callback Async with Return Value', () async {
+      // Test async callback with return value: onCalculateAsync
+      final _initResult = ffi_Dart_InitializeApiDL(NativeApi.initializeApiDLData);
+      if (_initResult != 0) {
+        throw Exception('Failed to initialize Dart API: $_initResult');
+      }
+
+      final t = testClassInstance;
+      final callbackImpl = MyCallback.Constructor();
+
+      // Test onCalculateAsync - async callback with int return
+      var onCalculateAsync_called = false;
+      callbackImpl.onCalculateAsync_block = (x, y) {
+        print("Dart: onCalculateAsync called with x=$x, y=$y");
+        onCalculateAsync_called = true;
+        return x * y;  // Return product
+      };
+
+      final callbackPtr = StdPtr_MyCallback.Constructor(callbackImpl);
+      t.registerCallback(callbackPtr);
+
+      // Verify callback block is set
+      expect(callbackImpl.onCalculateAsync_block, isNotNull);
+
+      // Test onCalculateAsync callback
+      final result = t.testCallbackCalculateAsync(7, 8);
+      // Need to wait for async callback
+      await Future.delayed(Duration(milliseconds: 100));
+      expect(onCalculateAsync_called, isTrue);
+      // Note: For async callbacks with return values, the return goes through ReceivePort
+      // so the C++ side may get a default value immediately
+      print("Dart: onCalculateAsync test passed - callback was called");
+    });
+
     // test('test Overload', () async {
     //   final t = testClassInstance;
     //   // Call the int version
